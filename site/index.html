@@ -1,0 +1,1047 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>קלפי פורחת</title>
+<link id="kit" rel="stylesheet" href="https://use.typekit.net/nsr0kgo.css">
+<script src="config.js"></script>
+<style>
+/* Composition = the Figma frame (1920×1080). Everything scales by --s; UI anchors to the viewport edges with 64-unit padding. */
+:root {
+  --s: 1;
+  --blue: #1c7de4;
+  --lawn-deep: #2f9443;
+  --ink: #101010;
+  --paper: #ffffff;
+  --count-color: var(--blue);
+  /* roles (overwritten from the kit at runtime) */
+  --display-family: "levit-1950"; --display-weight: 900; --display-stretch: normal; --display-style: normal;
+  --num-family: "narkiss-yair-variable"; --num-weight: 700; --num-stretch: normal; --num-style: normal; --num-vars: "MONO" 1;
+  --label-family: "narkiss-yair-variable"; --label-weight: 400; --label-stretch: normal; --label-style: normal;
+  color-scheme: light;
+}
+html, body { margin: 0; height: 100%; overflow: hidden; background: var(--blue); }
+body { font-family: system-ui, "Segoe UI", Arial, sans-serif; }
+#scene { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+
+/* ---------- composition text (positions from Figma) ---------- */
+.frame-ui { position: fixed; inset: 0; pointer-events: none; z-index: 2; }
+.headline {
+  position: absolute; margin: 0;
+  top: calc(64px * var(--s)); right: calc(64px * var(--s));
+  width: calc(696.035px * var(--s));
+  font-family: var(--display-family), "levit-1950", "Levit 1950", "Levit_1950", "Arial Black", "Arial Hebrew", sans-serif;
+  font-weight: var(--display-weight); font-stretch: var(--display-stretch); font-style: var(--display-style);
+  font-size: calc(124.83px * var(--s)); line-height: .8;
+  color: var(--paper); text-align: right; direction: rtl; word-break: break-word;
+  -webkit-text-stroke: calc(5px * var(--s)) var(--ink); paint-order: stroke fill; /* 2.5 outside stroke */
+  text-box: trim-both cap alphabetic;
+}
+.counter {
+  position: absolute;
+  left: calc(64px * var(--s)); bottom: calc(64px * var(--s));
+  background: var(--paper); border: calc(2.5px * var(--s)) solid #000;
+  padding: calc(16px * var(--s));
+  display: flex; flex-direction: column; align-items: center; gap: calc(33px * var(--s));
+  color: var(--count-color); line-height: .8; white-space: nowrap;
+  transition: color .6s;
+}
+.counter b {
+  font-family: var(--num-family), "narkiss-yair-variable", "narkiss-yair", "Narkiss Yair Variable", "Arial Hebrew", sans-serif;
+  font-weight: var(--num-weight); font-stretch: var(--num-stretch); font-style: var(--num-style);
+  font-variation-settings: var(--num-vars);
+  font-size: calc(120.401px * var(--s)); font-variant-numeric: tabular-nums slashed-zero;
+  text-box: trim-both cap alphabetic;
+}
+.counter span {
+  font-family: var(--label-family), "narkiss-yair-variable", "narkiss-yair", "Narkiss Yair Variable", "Arial Hebrew", sans-serif;
+  font-weight: var(--label-weight); font-stretch: var(--label-stretch); font-style: var(--label-style);
+  font-size: calc(32px * var(--s)); text-align: right; direction: rtl;
+  text-box: trim-both cap alphabetic;
+}
+
+#boxBtn { position: fixed; z-index: 3; background: transparent; border: 0; padding: 0; margin: 0; cursor: pointer; }
+#boxBtn:focus-visible { outline: 3px dashed var(--paper); outline-offset: 6px; }
+
+/* Figma: Texturelabs paper, screen blend, over everything */
+.grain {
+  position: fixed; inset: 0; z-index: 4; pointer-events: none; mix-blend-mode: screen;
+  background: url(paper.jpg) center / cover no-repeat;
+}
+
+/* ---------- review panel (not part of the design) ---------- */
+.panel {
+  position: fixed; z-index: 10; top: 16px; left: 16px; width: 296px; max-height: calc(100% - 300px); min-height: 200px; overflow: auto;
+  background: #fff; color: var(--ink); border: 2px solid var(--ink);
+  font: 13px/1.4 system-ui, "Segoe UI", Arial, sans-serif; direction: rtl;
+  box-shadow: 6px 6px 0 var(--ink);
+}
+.panel header {
+  display: flex; justify-content: space-between; align-items: center; gap: 8px;
+  padding: 8px 12px; border-bottom: 2px solid var(--ink); font-weight: 700;
+  position: sticky; top: 0; background: #fff;
+}
+.panel header button { font: inherit; font-weight: 400; background: none; border: 0; cursor: pointer; text-decoration: underline; padding: 0; color: inherit; }
+.panel.collapsed { width: auto; }
+.panel.collapsed .body { display: none; }
+.panel.collapsed header { border-bottom: 0; }
+.panel .body { padding: 10px 12px 12px; display: grid; gap: 14px; }
+.panel h3 { margin: 0 0 6px; font-size: 11px; letter-spacing: .06em; color: #555; font-weight: 600; }
+.states { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip {
+  font: inherit; font-size: 12px; padding: 5px 8px; cursor: pointer;
+  background: #fff; color: var(--ink); border: 1.5px solid var(--ink); border-radius: 0;
+}
+.chip:hover { background: #eef4fd; }
+.chip[aria-pressed="true"] { background: var(--ink); color: #fff; }
+.chip.primary { background: var(--blue); color: #fff; }
+.row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.row input[type=range] { flex: 1; accent-color: var(--ink); }
+.row output { min-width: 3.2em; text-align: left; font-variant-numeric: tabular-nums; font-weight: 600; }
+.field { display: grid; gap: 4px; }
+.field label { font-size: 12px; color: #444; display: flex; justify-content: space-between; gap: 6px; }
+.field label i { font-style: normal; color: #2f9443; }
+.field label i.bad { color: #c62828; }
+.field select, .field input[type=text] { font: inherit; padding: 4px; border: 1.5px solid var(--ink); background: #fff; color: var(--ink); max-width: 100%; }
+.field input[type=text] { direction: ltr; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; }
+.note { font-size: 11.5px; color: #555; margin: 0; }
+.chip:focus-visible, .panel select:focus-visible, .panel input:focus-visible, .panel header button:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+
+/* ---------- font combos overlay ---------- */
+.combos {
+  position: fixed; inset: 0; z-index: 20; background: #f1efe9; overflow: auto; direction: rtl;
+  font: 13px/1.4 system-ui, "Segoe UI", Arial, sans-serif; color: var(--ink);
+}
+.combos-head {
+  position: sticky; top: 0; z-index: 1; background: #f1efe9; border-bottom: 2px solid var(--ink);
+  display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; padding: 14px 24px;
+}
+.combos-head strong { font-size: 15px; }
+.combos-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 24px; padding: 24px; }
+.card { display: grid; gap: 8px; cursor: pointer; background: none; border: 0; padding: 0; text-align: right; font: inherit; color: inherit; }
+.card .mini { position: relative; width: 100%; aspect-ratio: 16 / 9; overflow: hidden; background: var(--blue); border: 2px solid var(--ink); }
+.card .mini img { position: absolute; display: block; max-width: none;
+  left: calc(516.83px * var(--s)); top: calc(180.6px * var(--s)); width: calc(1116px * var(--s)); height: calc(854px * var(--s)); }
+.card:hover .mini, .card:focus-visible .mini { outline: 4px solid var(--blue); outline-offset: 2px; }
+.card .cap { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; }
+.card .cap span:first-child { font-weight: 600; }
+.card.current .mini { outline: 4px solid var(--ink); outline-offset: 2px; }
+</style>
+</head>
+<body>
+
+<canvas id="scene" aria-hidden="true"></canvas>
+
+<main class="frame-ui">
+  <h1 class="headline">הוסיפו את הפתק שלכם</h1>
+  <div class="counter" aria-live="polite"><b id="num">0</b><span>פתקים הצטרפו לגינה</span></div>
+</main>
+
+<button id="boxBtn" type="button" aria-label="הכניסו פתק לקלפי"></button>
+<div class="grain"></div>
+
+<aside class="panel" id="panel">
+  <header>
+    <span>לוח בדיקה · מחשב</span>
+    <button type="button" id="collapse">הסתרה (H)</button>
+  </header>
+  <div class="body">
+    <section>
+      <h3>מצב</h3>
+      <div class="row"><span id="mode">…</span><button class="chip" type="button" id="backLive" hidden>חזרה לחי</button></div>
+    </section>
+    <section>
+      <h3>מצבים</h3>
+      <div class="states" id="states"></div>
+    </section>
+    <section>
+      <h3>פתקים</h3>
+      <div class="row">
+        <input id="nRange" type="range" min="0" max="1000" step="1" value="0" aria-label="מספר פתקים">
+        <output id="nOut">0</output>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <button class="chip" type="button" id="addOne">+ פתק (או קליק על הקלפי)</button>
+        <button class="chip primary" type="button" id="play">▶ כל התהליך</button>
+      </div>
+    </section>
+    <section>
+      <h3>רוח</h3>
+      <div class="row">
+        <input id="windRange" type="range" min="0" max="2" step="0.05" value="1" aria-label="עוצמת רוח">
+        <output id="windOut">1</output>
+      </div>
+    </section>
+    <section>
+      <h3>פונטים</h3>
+      <div class="field"><label for="displaySel">כותרת <i id="displayOk"></i></label><select id="displaySel"></select></div>
+      <div class="field" style="margin-top:8px"><label for="numSel">מספר <i id="numOk"></i></label><select id="numSel"></select></div>
+      <div class="field" style="margin-top:8px"><label for="labelSel">טקסט המונה <i id="labelOk"></i></label><select id="labelSel"></select></div>
+      <div class="field" style="margin-top:8px"><label for="numVars">צירים למספר (Mono)</label><input id="numVars" type="text" value='"MONO" 1' spellcheck="false"></div>
+      <div class="row" style="margin-top:8px"><button class="chip" type="button" id="openCombos">השוואת שילובים</button></div>
+      <p class="note" id="kitNote">טוען את הפונטים מהקיט…</p>
+    </section>
+  </div>
+</aside>
+
+<div class="combos" id="combos" hidden>
+  <div class="combos-head">
+    <strong>שילובי פונטים: כותרת × מונה</strong>
+    <span id="combosCount"></span>
+    <button class="chip" type="button" id="closeCombos">סגירה (Esc)</button>
+  </div>
+  <div class="combos-grid" id="combosGrid"></div>
+</div>
+
+<script>
+(() => {
+  // ---------- tokens ----------
+  const INK = '#101010', BLUE = '#1c7de4', WHITE = '#ffffff';
+  const LAWN = '#93dd6f', GRASS = '#4cb54f', GRASS_DK = '#2f9443', BUSH = '#3e9f4c', TREE = '#5bbd52';
+  const RED = '#ff4b3e', YEL = '#ffcf3a', PINK = '#ff9ac1', ORANGE = '#ff8a2b', TAN = '#f1d27a';
+  const ISO = 0.5774, TAU = Math.PI * 2;
+  const CONFIG = window.KALPI_CONFIG || {};
+  const GOAL = Math.max(100, CONFIG.goal || 1000);   // notes until the whole ground is green
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  let WIND = 1;
+
+  // ---------- the ballot box, exported from Figma (node 27:882) ----------
+  const OFF = { x: 516.83, y: 180.60 };   // SVG export origin inside the 1920×1080 frame
+  const BOX_SVG = `<svg width="1116" height="854" viewBox="0 0 1116 854" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path d="M473.617 499.546L473.701 499.628L473.817 499.639L659.134 516.608L1114.74 712.005L864.218 853.113L415.216 655.674L15.6372 424.97L254.968 286.78L473.617 499.546Z" fill="#101010" stroke="#101010" stroke-width="0.66"/>
+<path d="M14.978 424.97L415.07 655.97V477.77L14.978 246.77V424.97Z" fill="white" stroke="#101010" stroke-width="2.5" stroke-linejoin="round"/>
+<path d="M655.112 517.37L415.07 655.97V477.77L655.112 339.17V517.37Z" fill="#101010" stroke="#101010" stroke-width="1.584" stroke-linejoin="round"/>
+<path d="M14.978 246.77L415.07 477.77V488.66L23.36 262.544L14.978 252.776V246.77Z" fill="#101010"/>
+<path d="M1.25 246.77L415.07 485.69V386.69L1.25 147.77V246.77Z" fill="white" stroke="#101010" stroke-width="2.5" stroke-linejoin="round"/>
+<path d="M668.84 339.17L415.07 485.69V386.69L668.84 240.17V339.17Z" fill="#101010" stroke="#101010" stroke-width="2.5" stroke-linejoin="round"/>
+<path d="M255.02 1.25L668.84 240.17L415.07 386.69L1.25 147.77L255.02 1.25Z" fill="white" stroke="#101010" stroke-width="2.5" stroke-linejoin="round"/>
+<path d="M253.304 142.16L424.772 241.16L416.786 245.78L245.318 146.78L253.304 142.16Z" fill="#101010"/>
+</svg>`;
+  const BOX_PARTS = [...BOX_SVG.matchAll(/<path d="([^"]+)" fill="([^"]+)"(?: stroke="([^"]+)" stroke-width="([^"]+)")?/g)]
+    .map(m => ({ p: new Path2D(m[1]), fill: m[2] === 'white' ? WHITE : m[2], stroke: m[3], sw: m[4] ? +m[4] : 0 }));
+  const SHADOW_PART = BOX_PARTS[0], BODY_PARTS = BOX_PARTS.slice(1);
+
+  const f = (x, y) => ({ x: x + OFF.x, y: y + OFF.y });
+  const A = f(14.978, 424.97), B = f(415.07, 655.97), C = f(655.112, 517.37), D = f(255.02, 286.37);
+  const CENTER = f(335.04, 471.17);
+  const H_LID = 269.28;
+  const SLOT_A = f(249.311, 144.47), SLOT_B = f(420.779, 243.47);
+  const V = { x: 1.662, y: 0.742 };   // shadow offset per unit of height, read off the Figma shadow
+  const SHADOW_POLY = [[473.6, 499.5], [659.1, 516.6], [1114.7, 712.0], [864.2, 853.1], [415.2, 655.7], [15.6, 425.0], [255.0, 286.8]].map(([x, y]) => f(x, y));
+  const HULL = [[1.25, 147.77], [255.02, 1.25], [668.84, 240.17], [668.84, 339.17], [655.11, 517.37], [415.07, 655.97], [14.98, 424.97], [1.25, 246.77]].map(([x, y]) => f(x, y));
+  const FOOT = [A, B, C, D].map(p => ({ x: CENTER.x + (p.x - CENTER.x) * 1.12, y: CENTER.y + (p.y - CENTER.y) * 1.12 }));
+
+  // ---------- helpers ----------
+  function mulberry(seed) { let a = seed >>> 0; return () => { a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+  const clamp = (v, a = 0, b = 1) => Math.max(a, Math.min(b, v));
+  const easeOut = t => 1 - Math.pow(1 - t, 3);
+  const elastic = t => t <= 0 ? 0 : t >= 1 ? 1 : 1 - Math.cos(t * Math.PI * 2.6) * Math.exp(-t * 5.5);
+  const lerpPt = (p, q, t) => ({ x: p.x + (q.x - p.x) * t, y: p.y + (q.y - p.y) * t });
+  const isoDist = (x, y, c) => Math.hypot(x - c.x, (y - c.y) / ISO);
+  function inPoly(pt, poly) {
+    let inside = false;
+    for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+      const a = poly[i], b = poly[j];
+      if ((a.y > pt.y) !== (b.y > pt.y) && pt.x < (b.x - a.x) * (pt.y - a.y) / (b.y - a.y) + a.x) inside = !inside;
+    }
+    return inside;
+  }
+  function inFront(x, y) {
+    if (x < A.x - 60 || x > C.x + 80) return false;
+    const fy = x < B.x ? A.y + (B.y - A.y) * (x - A.x) / (B.x - A.x) : B.y + (C.y - B.y) * (x - B.x) / (C.x - B.x);
+    return y > fy;
+  }
+
+  // ---------- canvas / layout ----------
+  const cv = document.getElementById('scene'), ctx = cv.getContext('2d');
+  const root = document.documentElement, boxBtn = document.getElementById('boxBtn');
+  let W = 0, H = 0, DPR = 1, s = 1, ox = 0, oy = 0, BASE = [1, 0, 0, 1, 0, 0], view = { x0: 0, y0: 0, x1: 1920, y1: 1080 };
+  let counterPt = { x: 200, y: 950 };
+
+  function layout() {
+    W = innerWidth; H = innerHeight;
+    DPR = Math.min(2, devicePixelRatio || 1);
+    s = Math.min(W / 1920, H / 1080);
+    ox = (W - 1920 * s) / 2; oy = (H - 1080 * s) / 2;
+    cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR);
+    sizeLayers();
+    BASE = [DPR * s, 0, 0, DPR * s, DPR * ox, DPR * oy];
+    view = { x0: -ox / s, y0: -oy / s, x1: (W - ox) / s, y1: (H - oy) / s };
+    root.style.setProperty('--s', s);
+    const xs = HULL.map(p => ox + p.x * s), ys = HULL.map(p => oy + p.y * s);
+    Object.assign(boxBtn.style, { left: Math.min(...xs) + 'px', top: Math.min(...ys) + 'px', width: (Math.max(...xs) - Math.min(...xs)) + 'px', height: (Math.max(...ys) - Math.min(...ys)) + 'px' });
+    const r = document.querySelector('.counter').getBoundingClientRect();
+    counterPt = { x: (r.left + r.width / 2 - ox) / s, y: (r.top + r.height / 2 - oy) / s };
+    buildSprites();
+  }
+
+  // ---------- vector drawing (local units = Figma px, base at 0,0, up is −y) ----------
+  function paint(g, fill, sh, lw) {
+    g.fillStyle = sh ? INK : fill; g.fill();
+    if (lw) { g.lineWidth = lw; g.strokeStyle = INK; g.lineJoin = 'round'; g.lineCap = 'round'; g.stroke(); }
+  }
+  function flat(g, x, y, build) { g.save(); g.translate(x, y); g.scale(1, ISO); g.beginPath(); build(); g.restore(); }
+  const quadPt = (p0, p1, p2, t) => ({ x: (1 - t) * (1 - t) * p0.x + 2 * (1 - t) * t * p1.x + t * t * p2.x, y: (1 - t) * (1 - t) * p0.y + 2 * (1 - t) * t * p1.y + t * t * p2.y });
+  function leafShape(g, x, y, L, ang, col, sh, lw) {
+    g.save(); g.translate(x, y); g.rotate(ang);
+    g.beginPath(); g.moveTo(0, 0); g.quadraticCurveTo(L * 0.5, -L * 0.36, L, 0); g.quadraticCurveTo(L * 0.5, L * 0.2, 0, 0);
+    g.restore(); paint(g, col, sh, lw);
+  }
+  function blob(g, circles, col, sh, lw) {   // union of circles with a single outline
+    if (lw) { g.beginPath(); circles.forEach(([x, y, r]) => { g.moveTo(x + r, y); g.arc(x, y, r, 0, TAU); }); g.lineWidth = lw * 2; g.strokeStyle = INK; g.stroke(); }
+    g.beginPath(); circles.forEach(([x, y, r]) => { g.moveTo(x + r, y); g.arc(x, y, r, 0, TAU); }); g.fillStyle = sh ? INK : col; g.fill();
+  }
+
+  // ---------- species: each variant = stem/body sprite (+ optional head sprite) ----------
+  const SPECIES = {};
+  function stemDraw(h, lean, leaves, lw) {
+    const p0 = { x: 0, y: 0 }, p1 = { x: lean * 0.15, y: -h * 0.55 }, p2 = { x: lean, y: -h };
+    return (g, sh) => {
+      g.beginPath(); g.moveTo(0, 0); g.quadraticCurveTo(p1.x, p1.y, p2.x, p2.y);
+      g.lineWidth = lw; g.strokeStyle = INK; g.lineCap = 'round'; g.stroke();
+      for (const lf of leaves) { const q = quadPt(p0, p1, p2, lf.t); leafShape(g, q.x, q.y, lf.L, lf.side > 0 ? -0.55 : Math.PI + 0.55, lf.col || GRASS, sh, 1.7); }
+    };
+  }
+  const stemBounds = (h, lean, L) => ({ x0: Math.min(0, lean) - L - 6, x1: Math.max(0, lean) + L + 6, y0: -h - 6, y1: 6 });
+
+  function flatHead(type, R, col) {
+    const petals = [];
+    if (type === 'daisy') for (let i = 0; i < 12; i++) petals.push({ a: i / 12 * TAU, d: 0.55, rx: 0.45, ry: 0.16 });
+    if (type === 'anemone') for (let i = 0; i < 6; i++) petals.push({ a: i / 6 * TAU + 0.3, d: 0.45, rx: 0.42, ry: 0.42 });
+    if (type === 'five') for (let i = 0; i < 5; i++) petals.push({ a: i / 5 * TAU - 0.4, d: 0.48, rx: 0.38, ry: 0.3 });
+    petals.sort((m, n) => Math.sin(m.a) - Math.sin(n.a));
+    const center = type === 'daisy' ? [0.28, YEL] : type === 'anemone' ? [0.27, INK] : [0.19, WHITE];
+    return {
+      draw: (g, sh) => {
+        for (const q of petals) { flat(g, 0, 0, () => g.ellipse(Math.cos(q.a) * R * q.d, Math.sin(q.a) * R * q.d, R * q.rx, R * q.ry, q.a, 0, TAU)); paint(g, col, sh, 2); }
+        flat(g, 0, 0, () => g.arc(0, 0, R * center[0], 0, TAU)); paint(g, center[1], sh, 2);
+      },
+      bounds: { x0: -R * 1.05, x1: R * 1.05, y0: -R * 0.65, y1: R * 0.65 },
+    };
+  }
+  function tulipHead(R, col) {
+    const w = R * 0.56;
+    return {
+      draw: (g, sh) => {
+        g.beginPath(); g.moveTo(-w, -R * 0.75);
+        g.quadraticCurveTo(-w, 0, 0, 0); g.quadraticCurveTo(w, 0, w, -R * 0.75);
+        g.lineTo(w * 0.5, -R * 1.25); g.lineTo(0, -R * 0.85); g.lineTo(-w * 0.5, -R * 1.25); g.closePath();
+        paint(g, col, sh, 2);
+      },
+      bounds: { x0: -w - 3, x1: w + 3, y0: -R * 1.3 - 3, y1: 3 },
+    };
+  }
+  function sunHead(R) {
+    return {
+      draw: (g, sh) => {
+        for (let i = 0; i < 14; i++) { const a = i / 14 * TAU; g.beginPath(); g.ellipse(Math.cos(a) * R * 0.62, -R * 0.9 + Math.sin(a) * R * 0.62, R * 0.38, R * 0.15, a, 0, TAU); paint(g, YEL, sh, 2); }
+        g.beginPath(); g.arc(0, -R * 0.9, R * 0.42, 0, TAU); paint(g, INK, sh, 2);
+        if (!sh) { g.fillStyle = YEL; for (let i = 0; i < 7; i++) { const a = i / 7 * TAU; g.beginPath(); g.arc(Math.cos(a) * R * 0.22, -R * 0.9 + Math.sin(a) * R * 0.22, R * 0.05, 0, TAU); g.fill(); } }
+      },
+      bounds: { x0: -R * 1.1, x1: R * 1.1, y0: -R * 2, y1: R * 0.2 },
+    };
+  }
+  function puffHead(R) {
+    return {
+      draw: (g, sh) => {
+        g.beginPath(); g.arc(0, -R * 0.9, R, 0, TAU); paint(g, WHITE, sh, 1.6);
+        if (!sh) {
+          g.strokeStyle = INK; g.lineWidth = 1.2;
+          for (let i = 0; i < 14; i++) { const a = i / 14 * TAU; g.beginPath(); g.moveTo(Math.cos(a) * R * 0.2, -R * 0.9 + Math.sin(a) * R * 0.2); g.lineTo(Math.cos(a) * R * 0.75, -R * 0.9 + Math.sin(a) * R * 0.75); g.stroke(); }
+        }
+      },
+      bounds: { x0: -R - 3, x1: R + 3, y0: -R * 1.9 - 3, y1: 3 },
+    };
+  }
+  function spikeHead(L, col) {
+    return {
+      draw: (g, sh) => {
+        const n = 7;
+        for (let i = 0; i < n; i++) { const t = i / (n - 1), y = -t * L, side = i % 2 ? 1 : -1, r = 5.5 * (1 - t * 0.45); g.beginPath(); g.ellipse(side * 3.2, y, r, r * 0.8, side * 0.5, 0, TAU); paint(g, col, sh, 1.6); }
+      },
+      bounds: { x0: -12, x1: 12, y0: -L - 9, y1: 7 },
+    };
+  }
+
+  function addSpecies(name, n, make) { SPECIES[name] = []; const r = mulberry(name.length * 7919 + n); for (let i = 0; i < n; i++) SPECIES[name].push(make(r, i)); }
+
+  function defineSpecies() {
+    addSpecies('grass', 10, r => {
+      const nb = 3 + Math.floor(r() * 4), col = r() < 0.6 ? GRASS : GRASS_DK, blades = [];
+      for (let k = 0; k < nb; k++) blades.push({ x: (k - (nb - 1) / 2) * 4 + (r() - 0.5) * 3, h: 12 + r() * 24, lean: (k - (nb - 1) / 2) * 3.5 + (r() - 0.5) * 6, w: 4 + r() * 2.5 });
+      return { flex: 1.1, body: { bounds: { x0: -32, x1: 32, y0: -44, y1: 4 }, draw: (g, sh) => {
+        for (const b of blades) { g.beginPath(); g.moveTo(b.x - b.w / 2, 0); g.quadraticCurveTo(b.x - b.w / 2 + b.lean * 0.2, -b.h * 0.6, b.x + b.lean, -b.h); g.quadraticCurveTo(b.x + b.w / 2 + b.lean * 0.2, -b.h * 0.5, b.x + b.w / 2, 0); g.closePath(); paint(g, col, sh, 1.8); }
+      } } };
+    });
+    addSpecies('reed', 4, r => {
+      const blades = [0, 1, 2].map(k => ({ x: (k - 1) * 5, h: 38 + r() * 34, lean: (k - 1) * 7 + (r() - 0.5) * 8 }));
+      const stalk = { h: 60 + r() * 22, lean: (r() - 0.5) * 12 };
+      return { flex: 1.3, body: { bounds: { x0: -34, x1: 34, y0: -96, y1: 4 }, draw: (g, sh) => {
+        for (const b of blades) { g.beginPath(); g.moveTo(b.x - 2.5, 0); g.quadraticCurveTo(b.x + b.lean * 0.2, -b.h * 0.6, b.x + b.lean, -b.h); g.quadraticCurveTo(b.x + 2.5 + b.lean * 0.2, -b.h * 0.5, b.x + 2.5, 0); g.closePath(); paint(g, GRASS_DK, sh, 1.6); }
+        g.beginPath(); g.moveTo(0, 0); g.quadraticCurveTo(stalk.lean * 0.2, -stalk.h * 0.6, stalk.lean, -stalk.h); g.lineWidth = 1.8; g.strokeStyle = INK; g.stroke();
+        g.beginPath(); g.ellipse(stalk.lean, -stalk.h - 7, 3.6, 9, stalk.lean * 0.01, 0, TAU); paint(g, TAN, sh, 1.6);
+      } } };
+    });
+    addSpecies('clover', 4, r => {
+      const sprigs = []; const n = 3 + Math.floor(r() * 3);
+      for (let k = 0; k < n; k++) sprigs.push({ x: (r() - 0.5) * 22, h: 7 + r() * 10 });
+      const flower = r() < 0.45;
+      return { flex: 0.5, body: { bounds: { x0: -26, x1: 26, y0: -32, y1: 6 }, draw: (g, sh) => {
+        for (const sp of sprigs) {
+          g.beginPath(); g.moveTo(sp.x, 0); g.lineTo(sp.x, -sp.h); g.lineWidth = 1.5; g.strokeStyle = INK; g.stroke();
+          for (let i = 0; i < 3; i++) { const a = i / 3 * TAU - Math.PI / 2; flat(g, sp.x, -sp.h, () => g.arc(Math.cos(a) * 4.2, Math.sin(a) * 4.2, 4.4, 0, TAU)); paint(g, GRASS, sh, 1.5); }
+        }
+        if (flower) { const sp = sprigs[0]; g.beginPath(); g.moveTo(sp.x + 2, 0); g.lineTo(sp.x + 3, -sp.h - 9); g.lineWidth = 1.5; g.stroke(); g.beginPath(); g.arc(sp.x + 3, -sp.h - 12, 4.5, 0, TAU); paint(g, WHITE, sh, 1.5); }
+      } } };
+    });
+    addSpecies('bush', 6, r => {
+      const Wd = 40 + r() * 34, Hh = 30 + r() * 26;
+      const circles = [[-Wd * 0.28, -Hh * 0.4, Wd * 0.3], [Wd * 0.28, -Hh * 0.38, Wd * 0.3], [0, -Hh * 0.62, Wd * 0.33], [-Wd * 0.06, -Hh * 0.3, Wd * 0.3]];
+      const dots = []; const dc = [WHITE, PINK, YEL][Math.floor(r() * 3)];
+      if (r() < 0.65) for (let i = 0; i < 5; i++) dots.push([(r() - 0.5) * Wd * 0.8, -Hh * (0.3 + r() * 0.5)]);
+      return { flex: 0.12, body: { bounds: { x0: -Wd * 0.75, x1: Wd * 0.75, y0: -Hh * 0.62 - Wd * 0.36 - 4, y1: Wd * 0.05 + 6 }, draw: (g, sh) => {
+        blob(g, circles, BUSH, sh, 2);
+        for (const [x, y] of dots) { g.beginPath(); g.arc(x, y, 3.4, 0, TAU); paint(g, dc, sh, 1.4); }
+      } } };
+    });
+    addSpecies('fern', 3, r => {
+      const fr = [];
+      for (let k = 0; k < 6; k++) fr.push({ a: -1.25 + k / 5 * 2.5 + (r() - 0.5) * 0.2, L: 30 + r() * 16 });
+      return { flex: 0.7, body: { bounds: { x0: -56, x1: 56, y0: -52, y1: 6 }, draw: (g, sh) => {
+        for (const q of fr) {
+          const p0 = { x: 0, y: 0 }, p2 = { x: Math.sin(q.a) * q.L, y: -Math.cos(q.a) * q.L * 0.75 }, p1 = { x: Math.sin(q.a) * q.L * 0.4, y: -q.L * 0.9 };
+          g.beginPath(); g.moveTo(0, 0); g.quadraticCurveTo(p1.x, p1.y, p2.x, p2.y); g.lineWidth = 1.5; g.strokeStyle = INK; g.stroke();
+          for (let t = 0.25; t < 0.95; t += 0.14) { const p = quadPt(p0, p1, p2, t); g.beginPath(); g.ellipse(p.x, p.y, 4.6 * (1.1 - t), 2.4, q.a + (t * 10 % 2 > 1 ? 0.9 : -0.9), 0, TAU); paint(g, GRASS_DK, sh, 1.3); }
+        }
+      } } };
+    });
+    addSpecies('bells', 3, r => {
+      const h = 45 + r() * 20, col = r() < 0.5 ? WHITE : BLUE, side = r() < 0.5 ? 1 : -1;
+      const p0 = { x: 0, y: 0 }, p1 = { x: side * 4, y: -h * 1.1 }, p2 = { x: side * h * 0.45, y: -h * 0.82 };
+      return { flex: 0.8, body: { bounds: { x0: -h * 0.6 - 12, x1: h * 0.6 + 12, y0: -h * 1.1, y1: 6 }, draw: (g, sh) => {
+        g.beginPath(); g.moveTo(0, 0); g.quadraticCurveTo(p1.x, p1.y, p2.x, p2.y); g.lineWidth = 1.7; g.strokeStyle = INK; g.stroke();
+        leafShape(g, 0, -h * 0.25, 16, side > 0 ? Math.PI + 0.6 : -0.6, GRASS, sh, 1.5);
+        for (const t of [0.55, 0.75, 0.95]) { const p = quadPt(p0, p1, p2, t); g.beginPath(); g.moveTo(p.x - 5, p.y + 10); g.quadraticCurveTo(p.x - 5, p.y, p.x, p.y); g.quadraticCurveTo(p.x + 5, p.y, p.x + 5, p.y + 10); g.lineTo(p.x + 2, p.y + 8); g.lineTo(p.x, p.y + 11); g.lineTo(p.x - 2, p.y + 8); g.closePath(); paint(g, col, sh, 1.5); }
+      } } };
+    });
+    addSpecies('sabra', 2, r => {
+      const pads = [[0, -16, 10, 16, 0], [-10, -40, 8, 12, -0.45], [10, -38, 8.5, 12.5, 0.4], [1, -60, 7, 10, 0.05]];
+      const fruit = [[-14, -52], [16, -50], [4, -72]];
+      return { flex: 0.03, body: { bounds: { x0: -30, x1: 30, y0: -82, y1: 6 }, draw: (g, sh) => {
+        for (const [x, y, rx, ry, a] of pads) { g.beginPath(); g.ellipse(x, y, rx, ry, a, 0, TAU); paint(g, TREE, sh, 1.8); }
+        if (!sh) { g.fillStyle = INK; for (const [x, y] of pads) for (let i = 0; i < 3; i++) { g.beginPath(); g.arc(x + (i - 1) * 4, y + (i % 2 ? -4 : 3), 0.9, 0, TAU); g.fill(); } }
+        for (const [x, y] of fruit) { g.beginPath(); g.ellipse(x, y, 3.4, 4.6, 0, 0, TAU); paint(g, ORANGE, sh, 1.5); }
+      } } };
+    });
+    const flowerSpecies = (name, n, headFn, opts = {}) => addSpecies(name, n, (r, i) => {
+      const h = (opts.h || [45, 70])[0] + r() * ((opts.h || [45, 70])[1] - (opts.h || [45, 70])[0]);
+      const lean = (r() - 0.5) * h * 0.4;
+      const R = (opts.R || [10, 18])[0] + r() * ((opts.R || [10, 18])[1] - (opts.R || [10, 18])[0]);
+      const leaves = [{ t: 0.3 + r() * 0.15, side: r() < 0.5 ? 1 : -1, L: R * 1.3 }];
+      if (opts.twoLeaves || r() < 0.3) leaves.push({ t: 0.12 + r() * 0.1, side: -leaves[0].side, L: R * 1.1 });
+      return { flex: opts.flex || 0.75, tip: { x: lean, y: -h }, body: { bounds: stemBounds(h, lean, R * 1.4), draw: stemDraw(h, lean, leaves, opts.lw || 2.3) }, head: headFn(r, R, i) };
+    });
+    flowerSpecies('daisy', 4, (r, R) => flatHead('daisy', R, WHITE));
+    flowerSpecies('anemone', 4, (r, R) => flatHead('anemone', R, RED));
+    flowerSpecies('five', 8, (r, R, i) => flatHead('five', R, [YEL, BLUE, PINK, ORANGE][i % 4]));
+    flowerSpecies('tulip', 4, (r, R, i) => tulipHead(R, [PINK, RED, YEL, ORANGE][i % 4]), { twoLeaves: true });
+    flowerSpecies('sunflower', 3, (r, R) => sunHead(R), { h: [85, 125], R: [16, 22], flex: 0.45, twoLeaves: true, lw: 2.6 });
+    flowerSpecies('puff', 3, (r, R) => puffHead(R * 0.6), { h: [50, 72], R: [12, 16], flex: 1 });
+    flowerSpecies('spike', 4, (r, R, i) => spikeHead(26 + r() * 12, i % 2 ? BLUE : PINK), { h: [35, 55], flex: 0.9 });
+    // long-stemmed versions for the bouquet that fills the box
+    const tall = { h: [110, 250], R: [17, 27], lw: 2.5, flex: 0.55 };
+    flowerSpecies('s_daisy', 6, (r, R) => flatHead('daisy', R, WHITE), tall);
+    flowerSpecies('s_anemone', 6, (r, R) => flatHead('anemone', R, RED), tall);
+    flowerSpecies('s_five', 8, (r, R, i) => flatHead('five', R, [YEL, BLUE, PINK, ORANGE][i % 4]), tall);
+    flowerSpecies('s_tulip', 4, (r, R, i) => tulipHead(R, [PINK, RED, YEL, ORANGE][i % 4]), { ...tall, twoLeaves: true });
+    flowerSpecies('s_sun', 3, (r, R) => sunHead(R), { ...tall, R: [20, 26], twoLeaves: true });
+    flowerSpecies('s_spike', 4, (r, R, i) => spikeHead(40 + r() * 16, i % 2 ? BLUE : PINK), tall);
+    flowerSpecies('s_puff', 3, (r, R) => puffHead(R * 0.62), tall);
+  }
+
+  // render every variant into bitmaps at the current scale
+  let SPR = 1;
+  function raster(part) {
+    const pad = 4, b = part.bounds, k = SPR;
+    const w = Math.max(1, Math.ceil((b.x1 - b.x0 + pad * 2) * k)), h = Math.max(1, Math.ceil((b.y1 - b.y0 + pad * 2) * k));
+    const mk = sh => { const c = document.createElement('canvas'); c.width = w; c.height = h; const g = c.getContext('2d'); g.setTransform(k, 0, 0, k, (pad - b.x0) * k, (pad - b.y0) * k); part.draw(g, sh); return c; };
+    part.img = mk(false); part.sil = mk(true); part.ax = pad - b.x0; part.ay = pad - b.y0;
+  }
+  function buildSprites() {
+    SPR = DPR * s * 1.25;
+    for (const list of Object.values(SPECIES)) for (const v of list) {
+      raster(v.body);
+      if (!v.head) continue;
+      raster(v.head);
+      const b = v.body.bounds, h = v.head.bounds, tx = v.tip.x, ty = v.tip.y;
+      v.full = v.full || { bounds: { x0: Math.min(b.x0, tx + h.x0), x1: Math.max(b.x1, tx + h.x1), y0: Math.min(b.y0, ty + h.y0), y1: Math.max(b.y1, ty + h.y1) },
+        draw: (g, sh) => { v.body.draw(g, sh); g.save(); g.translate(tx, ty); v.head.draw(g, sh); g.restore(); } };
+      raster(v.full);
+    }
+  }
+
+  // ---------- how votes turn into flowers ----------
+  // One note = one flower. Notes 1–30 fill the box; small grass patches sprout meanwhile.
+  // From note 31 on, every note is a flower in a patch on the ground, and a patch grows
+  // just enough to hold the flowers it has. The whole ground is green only at GOAL.
+  const SLOT_MAX = 30, SPROUT_AT = [4, 9, 15, 21, 27];
+  const GRID = 300, RMIN = 55;
+  let patches = [], plants = [], voteFlower = [];
+  const pwob = (p, a) => 1 + 0.06 * Math.sin(5 * a + p.ph1) + 0.035 * Math.sin(9 * a + p.ph2);
+
+  const FLOWER_MIX = [['daisy', 0.2], ['anemone', 0.17], ['five', 0.25], ['tulip', 0.12], ['sunflower', 0.06], ['puff', 0.09], ['spike', 0.11]];
+  function pickWeighted(r, mix) { let v = r(), acc = 0; for (const [k, w] of mix) { acc += w; if (v < acc) return k; } return mix[mix.length - 1][0]; }
+  const blocked = pt => inPoly(pt, FOOT) || inPoly(pt, SHADOW_POLY);
+
+  function genGarden() {
+    const r = mulberry(20261027);
+    patches = [];
+    const rowH = GRID * 0.866 * ISO;
+    for (let j = 0, y = -420; y < 1500; j++, y += rowH)
+      for (let x = -520 + (j % 2) * GRID / 2; x < 2440; x += GRID)
+        patches.push({ c: { x: x + (r() - 0.5) * GRID * 0.5, y: y + (r() - 0.5) * rowH * 0.5 }, rmax: 250 + r() * 70, ph1: r() * TAU, ph2: r() * TAU, rv: 0, vel: 0, wake: 0, flowers: [], votes: [] });
+
+    // patches whose centre is on screen (and clear of the box) carry the counted flowers
+    const onScreen = p => p.c.x > view.x0 + 20 && p.c.x < view.x1 - 20 && p.c.y > view.y0 + 10 && p.c.y < view.y1 - 10;
+    const counted = patches.filter(p => onScreen(p) && !blocked(p.c));
+    const deco = patches.filter(p => !counted.includes(p));
+    counted.forEach(p => p.key = r()); counted.sort((a, b) => a.key - b.key);
+    const anchor = { x: CENTER.x - 380, y: CENTER.y + 190 };
+    const first = counted.reduce((b, p) => isoDist(p.c.x, p.c.y, anchor) < isoDist(b.c.x, b.c.y, anchor) ? p : b, counted[0]);
+    counted.splice(counted.indexOf(first), 1); counted.unshift(first);
+
+    plants = [];
+    const add = (p, species, d, a, extra = {}) => {
+      const x = p.c.x + d * Math.cos(a), y = p.c.y + d * Math.sin(a) * ISO;
+      if (blocked({ x, y })) return null;
+      const list = SPECIES[species];
+      const pl = { patch: p, d, a, gx: x, gy: y, sp: species, v: list[Math.floor(r() * list.length)], k: 0.85 + r() * 0.35, flip: r() < 0.5 ? -1 : 1,
+        front: inFront(x, y), born: undefined, delay: r() * 260, phase: r() * TAU, baseH: 0, calm: CALM.has(species), ...extra };
+      plants.push(pl);
+      return pl;
+    };
+    const spot = (p, maxFrac = 0.98) => ({ d: Math.sqrt(r()) * p.rmax * maxFrac, a: r() * TAU });
+
+    // flower capacity per counted patch, by area, adding up to every note after the box
+    const FIELD = GOAL - SLOT_MAX, area = counted.reduce((s2, p) => s2 + p.rmax * p.rmax, 0);
+    let left = FIELD;
+    counted.forEach((p, i) => { p.cap = i === counted.length - 1 ? left : Math.max(1, Math.round(FIELD * p.rmax * p.rmax / area)); left -= p.cap; });
+
+    for (const p of patches) {
+      const isCounted = p.cap !== undefined;
+      const nFl = isCounted ? p.cap : 12;
+      for (let i = 0, tries = 0; i < nFl && tries < nFl * 30; tries++) {
+        const q = spot(p), pl = add(p, pickWeighted(r, FLOWER_MIX), q.d, q.a, { flower: true, vote: isCounted ? Infinity : -1 });
+        if (pl) { p.flowers.push(pl); i++; }
+      }
+      p.flowers.sort((a, b) => a.d - b.d);
+      for (let i = 0; i < 4; i++) add(p, 'grass', r() * 42, r() * TAU);          // so a fresh sprout isn't bare
+      for (let i = 0; i < 12; i++) { const q = spot(p); add(p, 'grass', q.d, q.a); }
+      for (let i = 0; i < 2; i++) { const q = spot(p); add(p, 'reed', q.d, q.a); }
+      for (let i = 0; i < 3; i++) { const q = spot(p); add(p, 'clover', q.d, q.a); }
+      if (r() < 0.6) { const q = spot(p); add(p, 'fern', q.d, q.a); }
+      if (r() < 0.7) { const q = spot(p); add(p, 'bush', q.d, q.a); }
+      if (r() < 0.3) { const q = spot(p); add(p, 'bells', q.d, q.a); }
+      if (r() < 0.07) { const q = spot(p); add(p, 'sabra', q.d, q.a); }
+    }
+    plants.sort((a, b) => a.gy - b.gy);
+
+    // schedule: which note becomes which flower
+    voteFlower = [];
+    const open = [];
+    let next = 0;
+    SPROUT_AT.forEach(v => { if (next < counted.length) { const p = counted[next++]; p.T = v; open.push(p); } });
+    for (let v = SLOT_MAX + 1; v <= GOAL; v++) {
+      const room = open.reduce((s2, p) => s2 + (p.flowers.length - p.votes.length), 0);
+      if (next < counted.length && (room === 0 || r() < 0.075)) { const p = counted[next++]; p.T = v; open.push(p); }
+      let pick = r() * open.reduce((s2, p) => s2 + (p.flowers.length - p.votes.length), 0), chosen = null;
+      for (const p of open) { pick -= p.flowers.length - p.votes.length; if (pick < 0) { chosen = p; break; } }
+      if (!chosen) continue;
+      const fl = chosen.flowers[chosen.votes.length];
+      fl.vote = v; chosen.votes.push(v); voteFlower[v] = fl;
+    }
+    // patches off screen or under the box fill in over the last part
+    deco.forEach((p, k) => { p.T = Math.round(GOAL * 0.72 + (k / Math.max(1, deco.length)) * GOAL * 0.2); p.deco = true; });
+  }
+
+  function patchTarget(p, v) {
+    if (p.T === undefined || v < p.T) return 0;
+    if (p.deco) return RMIN + (p.rmax - RMIN) * easeOut(clamp((v - p.T) / (GOAL - p.T)));
+    let m = 0; while (m < p.votes.length && p.votes[m] <= v) m++;
+    if (m === 0) return RMIN;
+    if (m === p.flowers.length) return p.rmax + 10;
+    return Math.max(RMIN, p.flowers[m - 1].d + 42);
+  }
+
+  // ---------- the bouquet that fills the box first ----------
+  let slotPlants = [];
+  function genSlot() {
+    const r = mulberry(4242);
+    const kinds = [['s_daisy', 0.24], ['s_anemone', 0.2], ['s_five', 0.22], ['s_tulip', 0.12], ['s_sun', 0.07], ['s_spike', 0.09], ['s_puff', 0.06]];
+    slotPlants = [];
+    for (let i = 0; i < SLOT_MAX; i++) {
+      const t = i === 0 ? 0.5 : 0.08 + ((i * 0.618034 + 0.27) % 1) * 0.84;
+      const S0 = lerpPt(SLOT_A, SLOT_B, t);
+      const sp = i === 0 ? 's_daisy' : pickWeighted(r, kinds), list = SPECIES[sp];
+      const spread = Math.min(1, 0.3 + i / 12);
+      slotPlants.push({ at: i + 1, gx: S0.x, gy: S0.y + H_LID, baseH: H_LID, sp, v: list[Math.floor(r() * list.length)], k: 0.85 + r() * 0.3,
+        flip: r() < 0.5 ? -1 : 1, fan: i === 0 ? 0 : ((t - 0.5) * 1.3 + (r() - 0.5) * 0.5) * spread, born: undefined, delay: 0, phase: r() * TAU });
+    }
+    slotPlants.sort((a, b) => a.gy - b.gy);
+  }
+
+  // ---------- wind ----------
+  function windAt(x, y, t) {
+    const base = Math.sin(t * 0.0013 + x * 0.005 + y * 0.003) * 0.35 + Math.sin(t * 0.0029 + x * 0.011) * 0.15;
+    const span = 3400, front = ((t * 0.34) % span) - 800;          // a gust sweeping left → right
+    const d = (x + y * 0.4) - front;
+    return WIND * (0.05 * base + 0.2 * Math.exp(-(d * d) / (2 * 210 * 210)));
+  }
+
+  // ---------- sprite drawing ----------
+  const DUR = { grass: 700, clover: 700, reed: 900, fern: 900, bush: 900, bells: 1000, sabra: 1100, tree: 1500 };
+  // (m0 m1 m2 m3 m4 m5) · (l0 l1 l2 l3 lx ly) · sprite-pixel → device, without allocating
+  function blit(g, part, sh, m0, m1, m2, m3, m4, m5, l0, l1, l2, l3, lx, ly) {
+    const a = m0 * l0 + m2 * l1, b = m1 * l0 + m3 * l1, c = m0 * l2 + m2 * l3, d = m1 * l2 + m3 * l3;
+    const e = m0 * lx + m2 * ly + m4, f = m1 * lx + m3 * ly + m5, k = SPR;
+    g.setTransform(a / k, b / k, c / k, d / k, e - a * part.ax - c * part.ay, f - b * part.ax - d * part.ay);
+    g.drawImage(sh ? part.sil : part.img, 0, 0);
+  }
+  // draws one plant (body or shadow) into g
+  function drawPlant(g, p, now, sh, still) {
+    const v = p.v, dur = DUR[p.sp] || 1100;
+    const t = reduce || still ? 1 : clamp((now - p.born) / dur);
+    if (t <= 0) return;
+    const gy = elastic(t), gx = 1 + 0.3 * (1 - Math.min(1, gy));
+    const w = (reduce || still || p.calm ? 0 : windAt(p.gx, p.gy, now) + Math.sin(now * 0.002 + p.phase) * 0.012 * WIND) * v.flex + (p.fan || 0);
+    // frame → device, then the ground point, then (shadow) projection, then lift
+    const K = BASE[0];
+    let m0 = K, m1 = 0, m2 = 0, m3 = K, m4 = BASE[4] + K * p.gx, m5 = BASE[5] + K * p.gy;
+    if (sh) { m2 = -K * V.x; m3 = -K * V.y; }
+    if (p.baseH) { m4 -= m2 * p.baseH; m5 -= m3 * p.baseH; }
+    // local: skew(w) · scale(sx, sy)
+    const sx = p.k * p.flip * gx, sy = p.k * gy;
+    if (t >= 1 && v.full) { blit(g, v.full, sh, m0, m1, m2, m3, m4, m5, sx, 0, -w * sy, sy, 0, 0); return; }   // grown: stem + head in one image
+    blit(g, v.body, sh, m0, m1, m2, m3, m4, m5, sx, 0, -w * sy, sy, 0, 0);
+    if (v.head) {
+      const th = reduce ? 1 : clamp((t - 0.38) / 0.62);
+      if (th <= 0) return;
+      const hs = elastic(th);
+      const tx = sx * v.tip.x - w * sy * v.tip.y, ty = sy * v.tip.y;
+      const rot = w * 0.8 + (reduce ? 0 : Math.sin(th * 14) * 0.35 * (1 - th));
+      const cr = Math.cos(rot), sr = Math.sin(rot), hx = p.k * p.flip * hs, hy = p.k * hs;
+      blit(g, v.head, sh, m0, m1, m2, m3, m4, m5, cr * hx, sr * hx, -sr * hy, cr * hy, tx, ty);
+    }
+  }
+  const onScreen = p => p.gx > view.x0 - 420 && p.gx < view.x1 + 120 && p.gy > view.y0 - 60 && p.gy < view.y1 + 260;
+
+  // Once a plant has finished growing, its shadow (and, for plants the wind doesn't move,
+  // its body) is painted once into static layers. Removing anything repaints them.
+  const CALM = new Set(['grass', 'clover', 'bush', 'sabra', 'fern']);
+  const layers = { sh: document.createElement('canvas'), back: document.createElement('canvas'), front: document.createElement('canvas') };
+  const lg = {};
+  let layersDirty = true;
+  function sizeLayers() { for (const [k, c] of Object.entries(layers)) { c.width = cv.width; c.height = cv.height; lg[k] = c.getContext('2d'); } layersDirty = true; }
+  function clearLayers() {
+    for (const [k, c] of Object.entries(layers)) { lg[k].setTransform(1, 0, 0, 1, 0, 0); lg[k].clearRect(0, 0, c.width, c.height); }
+    for (const p of plants) p.shCached = p.cached = false;
+    layersDirty = false;
+  }
+  function settle(p, now) {
+    drawPlant(lg.sh, p, now, true, true);
+    p.shCached = true;
+    if (p.calm) { drawPlant(p.front ? lg.front : lg.back, p, now, false, true); p.cached = true; }
+  }
+
+  // ---------- state ----------
+  // target: the real count (live, or simulated from the review panel). The garden (nGrow)
+  // chases it one flower at a time; big jumps (first load, presets) bloom in all at once.
+  let target = 0, nGrow = 0, inflight = 0, lastLaunch = 0, lastT = performance.now();
+  let pending = null;            // own note sent, waiting for the server
+  let voted = false;             // one note per page load
+  const papers = [], seeds = [], rings = [];
+  const numEl = document.getElementById('num');
+  const shown = () => pending ? Math.max(target, pending.base + 1) : target;
+  function showCount() { const v = shown(); numEl.textContent = v.toLocaleString('en-US'); syncPanel(v); }
+  function setTarget(v) {
+    target = Math.max(0, Math.round(v));
+    if (pending && target > pending.base) pending = null;
+    showCount();
+  }
+  function bloomTo(v, now) {      // jump the garden, with patches waking at different moments
+    seeds.length = 0; inflight = 0;
+    nGrow = v;
+    patches.forEach(p => { if (patchTarget(p, v) > 0 && p.rv < 1) p.wake = now + Math.random() * 900; });
+  }
+
+  // ---------- vote: note → slot → (box full? seed → flower in a patch) ----------
+  const PAPER_H = 150, PAPER_MS = 720, SEED_MS = 760;
+  function castVote() {
+    if (voted && !sim) return;
+    if (!sim) { voted = true; boxBtn.disabled = true; boxBtn.setAttribute('aria-label', 'הפתק שלך כבר בקלפי'); }
+    if (reduce) return sendVote();
+    papers.push({ t0: performance.now() });
+  }
+  function sendVote() {
+    if (sim) { setTarget(target + 1); return; }
+    pending = { base: target };
+    showCount();
+    COUNTER.vote().catch(() => { pending = null; showCount(); });
+  }
+  function growOne(now) {
+    const v = nGrow + inflight + 1;
+    const fl = voteFlower[v];
+    if (v <= SLOT_MAX || !fl || reduce) { nGrow++; return; }
+    const from = lerpPt(SLOT_A, SLOT_B, 0.5);
+    seeds.push({ t0: now, from: { x: from.x, y: from.y + H_LID }, to: { x: fl.gx, y: fl.gy }, patch: fl.patch });
+    inflight++;
+  }
+  function paperQuad(d, sh) {
+    const hb = Math.max(d, 0), ht = d + PAPER_H;
+    if (ht <= 0) return null;
+    const S0 = lerpPt(SLOT_A, SLOT_B, 0.24), S1 = lerpPt(SLOT_A, SLOT_B, 0.76);
+    const pt = (Sp, h) => sh ? { x: Sp.x + (H_LID + h) * V.x, y: Sp.y + H_LID + (H_LID + h) * V.y } : { x: Sp.x, y: Sp.y - h };
+    return [pt(S0, hb), pt(S1, hb), pt(S1, ht), pt(S0, ht)];
+  }
+  function setFrame() { ctx.setTransform(BASE[0], BASE[1], BASE[2], BASE[3], BASE[4], BASE[5]); }
+  function drawPaper(pp, now, sh) {
+    const t = clamp((now - pp.t0) / PAPER_MS), d = 230 - (230 + PAPER_H) * t * t;
+    const q = paperQuad(d, sh); if (!q) return;
+    setFrame(); ctx.beginPath(); q.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)); ctx.closePath();
+    paint(ctx, WHITE, sh, 2.5);
+  }
+  function seedPos(sd, now) {
+    const t = clamp((now - sd.t0) / SEED_MS), e = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+    const g = lerpPt(sd.from, sd.to, e);
+    const h = (H_LID + 30) * (1 - t) + 380 * 4 * t * (1 - t);
+    return { g, h, t };
+  }
+  function drawSeed(sd, now, sh) {
+    const { g, h } = seedPos(sd, now);
+    setFrame();
+    ctx.beginPath();
+    if (sh) ctx.ellipse(g.x + h * V.x, g.y + h * V.y, 9, 9 * ISO, 0, 0, TAU);
+    else ctx.ellipse(g.x, g.y - h, 9, 11, 0, 0, TAU);
+    paint(ctx, WHITE, sh, 2.5);
+  }
+
+  // ---------- lawn ----------
+  function lawnPath(p, dy) {
+    const R = p.rv;
+    for (let i = 0; i <= 64; i++) {
+      const a = i / 64 * TAU, rr = R * pwob(p, a);
+      const x = p.c.x + rr * Math.cos(a), y = p.c.y + rr * Math.sin(a) * ISO + dy;
+      i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+    }
+    ctx.closePath();
+  }
+  function drawLawn(active) {
+    if (!active.length) return;
+    setFrame();
+    ctx.beginPath(); active.forEach(p => lawnPath(p, 13)); ctx.fillStyle = INK; ctx.fill();           // turf edge
+    ctx.beginPath(); active.forEach(p => lawnPath(p, 0)); ctx.lineWidth = 5; ctx.strokeStyle = INK; ctx.lineJoin = 'round'; ctx.stroke();
+    ctx.fillStyle = LAWN; ctx.fill();                                                                    // one outline around the union
+  }
+
+  // ---------- frame ----------
+  function frame(now) {
+    const dt = Math.min(50, now - lastT) / 1000; lastT = now;
+
+    for (let i = papers.length - 1; i >= 0; i--) if (now - papers[i].t0 > PAPER_MS) { papers.splice(i, 1); sendVote(); }
+    for (let i = seeds.length - 1; i >= 0; i--) if (now - seeds[i].t0 > SEED_MS) {
+      const sd = seeds.splice(i, 1)[0]; nGrow++; inflight--;
+      sd.patch.vel += 220; rings.push({ t0: now, at: sd.to });
+    }
+    // the garden chases the count
+    const gap = target - nGrow - inflight;
+    if (gap > 12) bloomTo(target, now);
+    else if (gap > 0 && now - lastLaunch > 170) { growOne(now); lastLaunch = now; }
+    else if (gap < 0) bloomTo(target, now);
+
+    // patch springs
+    const active = [];
+    for (const p of patches) {
+      const target = now < p.wake ? 0 : patchTarget(p, nGrow);
+      if (reduce) p.rv = target;
+      else { const acc = 95 * (target - p.rv) - 11 * p.vel; p.vel += acc * dt; p.rv += p.vel * dt; if (target === 0 && p.rv < 2) { p.rv = 0; p.vel = 0; } }
+      p.target = target;
+      if (p.rv > 1) active.push(p);
+    }
+
+    // which plants are out: counted flowers by their note, everything else by the patch edge
+    const live = [];
+    if (layersDirty) clearLayers();
+    for (const p of plants) {
+      const pr = p.patch, edge = pwob(pr, p.a);
+      let out;
+      if (p.flower && p.vote > 0) out = p.vote <= nGrow && (pr.rv > 1 || p.born !== undefined);
+      else out = p.born !== undefined ? p.d < pr.target * edge + 4 : p.d + 12 < pr.rv * edge;
+      if (!out) { if (p.shCached) layersDirty = true; p.born = undefined; continue; }
+      if (p.born === undefined) p.born = Math.max(now, pr.wake) + (p.vote === nGrow ? 0 : p.delay);
+      if (!onScreen(p)) continue;
+      if (!p.shCached && (reduce || now - p.born >= (DUR[p.sp] || 1100))) settle(p, now);
+      if (!p.cached) live.push(p);
+    }
+    for (const p of slotPlants) {
+      if (nGrow < p.at) { p.born = undefined; continue; }
+      if (p.born === undefined) p.born = now + (p.at === nGrow ? 0 : Math.random() * 500);
+    }
+
+    // paint
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.fillStyle = BLUE; ctx.fillRect(0, 0, cv.width, cv.height);
+    drawLawn(active);
+
+    ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.drawImage(layers.sh, 0, 0);
+    for (const p of live) if (!p.shCached) drawPlant(ctx, p, now, true);
+    for (const p of slotPlants) if (p.born !== undefined) drawPlant(ctx, p, now, true);
+    for (const pp of papers) drawPaper(pp, now, true);
+    for (const sd of seeds) drawSeed(sd, now, true);
+
+    ctx.setTransform(BASE[0], BASE[1], BASE[2], BASE[3], BASE[4] + OFF.x * BASE[0], BASE[5] + OFF.y * BASE[3]);
+    ctx.fillStyle = INK; ctx.fill(SHADOW_PART.p); ctx.lineWidth = SHADOW_PART.sw; ctx.strokeStyle = INK; ctx.stroke(SHADOW_PART.p);
+
+    ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.drawImage(layers.back, 0, 0);
+    for (const p of live) if (!p.front) drawPlant(ctx, p, now, false);
+
+    ctx.setTransform(BASE[0], BASE[1], BASE[2], BASE[3], BASE[4] + OFF.x * BASE[0], BASE[5] + OFF.y * BASE[3]);
+    for (const part of BODY_PARTS) {
+      ctx.fillStyle = part.fill; ctx.fill(part.p);
+      if (part.sw) { ctx.lineWidth = part.sw; ctx.strokeStyle = part.stroke; ctx.lineJoin = 'round'; ctx.stroke(part.p); }
+    }
+    for (const p of slotPlants) if (p.born !== undefined) drawPlant(ctx, p, now, false);
+    for (const pp of papers) drawPaper(pp, now, false);
+
+    ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.drawImage(layers.front, 0, 0);
+    for (const p of live) if (p.front) drawPlant(ctx, p, now, false);
+
+    // landing rings
+    for (let i = rings.length - 1; i >= 0; i--) {
+      const rg = rings[i], t = (now - rg.t0) / 650;
+      if (t >= 1) { rings.splice(i, 1); continue; }
+      setFrame(); ctx.globalAlpha = 1 - t;
+      ctx.beginPath(); ctx.ellipse(rg.at.x, rg.at.y, 20 + t * 90, (20 + t * 90) * ISO, 0, 0, TAU);
+      ctx.lineWidth = 3; ctx.strokeStyle = INK; ctx.stroke(); ctx.globalAlpha = 1;
+    }
+    for (const sd of seeds) drawSeed(sd, now, false);
+
+    // counter number follows the ground under it
+    const covered = active.some(p => isoDist(counterPt.x, counterPt.y, p.c) < p.rv * 0.9);
+    root.style.setProperty('--count-color', covered ? 'var(--lawn-deep)' : 'var(--blue)');
+
+    requestAnimationFrame(frame);
+  }
+
+  // ---------- live count ----------
+  // live.js (Firebase) calls window.kalpiRemote(count) and provides window.kalpiVote().
+  // Without it (a local file) the count lives in this page only.
+  let sim = false, liveCount = null;
+  window.kalpiRemote = v => { liveCount = v; if (!sim) setTarget(v); syncMode(); };
+  const COUNTER = { vote: () => window.kalpiVote ? window.kalpiVote() : (setTarget(target + 1), Promise.resolve()) };
+
+  // ---------- review panel (only with ?review, or in the preview file) ----------
+  const REVIEW = CONFIG.review || /review/.test(location.search + location.hash);
+  const panel = document.getElementById('panel');
+  if (!REVIEW) panel.hidden = true;
+  const STATES = [['ריק', 0], ['פתק ראשון', 1], ['5', 5], ['15', 15], ['קלפי מלאה · 30', 30], ['60', 60], ['חלקי · 200', 200], ['חצי · 500', 500], ['כמעט · 800', 800], ['מלא · 1,000', 1000]];
+  const statesEl = document.getElementById('states');
+  const modeEl = document.getElementById('mode'), backLive = document.getElementById('backLive');
+  function simTo(v) { sim = true; setTarget(v); syncMode(); }
+  STATES.forEach(([label, v]) => {
+    const b = document.createElement('button');
+    b.className = 'chip'; b.type = 'button'; b.textContent = label; b.dataset.v = v;
+    b.addEventListener('click', () => { stopAuto(); papers.length = 0; simTo(v); });
+    statesEl.appendChild(b);
+  });
+  const nRange = document.getElementById('nRange'), nOut = document.getElementById('nOut');
+  nRange.max = GOAL;
+  nRange.addEventListener('input', () => { stopAuto(); simTo(+nRange.value); });
+  function syncPanel(v) {
+    nRange.value = Math.min(v, GOAL); nOut.textContent = v.toLocaleString('en-US');
+    statesEl.querySelectorAll('.chip').forEach(b => b.setAttribute('aria-pressed', String(+b.dataset.v === v)));
+  }
+  function syncMode() {
+    const live = typeof window.kalpiVote === 'function';
+    modeEl.textContent = sim ? 'סימולציה (רק אצלך)' : live ? `חי · ${liveCount ?? '…'} פתקים בשרת` : 'מקומי (בלי שרת)';
+    backLive.hidden = !(sim && live);
+    boxBtn.disabled = voted && !sim;
+  }
+  backLive.addEventListener('click', () => { stopAuto(); sim = false; setTarget(liveCount || 0); syncMode(); });
+  document.getElementById('addOne').addEventListener('click', () => { if (!sim) sim = true; syncMode(); castVote(); });
+  boxBtn.addEventListener('click', castVote);
+  const windRange = document.getElementById('windRange'), windOut = document.getElementById('windOut');
+  windRange.addEventListener('input', () => { WIND = +windRange.value; windOut.textContent = String(+WIND.toFixed(2)); });
+
+  // the whole process: notes arrive slowly, then faster and faster (simulation only)
+  let auto = null;
+  const playBtn = document.getElementById('play');
+  function stopAuto() { if (auto) { clearTimeout(auto); auto = null; playBtn.textContent = '▶ כל התהליך'; } }
+  playBtn.addEventListener('click', () => {
+    if (auto) return stopAuto();
+    papers.length = 0; simTo(0);
+    let k = 0;
+    playBtn.textContent = '■ עצירה';
+    const step = () => {
+      if (target >= GOAL) return stopAuto();
+      const interval = Math.max(40, 1400 * Math.pow(0.91, k));
+      if (interval > 320) papers.push({ t0: performance.now() });
+      else setTarget(Math.min(GOAL, target + 1 + Math.max(0, Math.floor((k - 40) / 9))));
+      k++;
+      auto = setTimeout(step, interval);
+    };
+    step();
+  });
+
+  const togglePanel = () => panel.classList.toggle('collapsed');
+  document.getElementById('collapse').addEventListener('click', togglePanel);
+  addEventListener('keydown', e => {
+    if (e.target.closest && e.target.closest('select, input')) return;
+    if (e.key === 'h' || e.key === 'H' || e.key === 'י') togglePanel();
+    if (e.key === 'Escape') closeCombos();
+  });
+
+  // ---------- fonts from the Adobe Fonts kit ----------
+  const KIT_URL = 'https://use.typekit.net/nsr0kgo.css';
+  const WEIGHTS = { 100: 'Thin', 200: 'ExtraLight', 300: 'Light', 400: 'Regular', 500: 'Medium', 600: 'SemiBold', 700: 'Bold', 800: 'ExtraBold', 900: 'Black' };
+  const ROLE_W = { display: 900, num: 700, label: 400 };
+  let faces = [];
+  const roleSel = { display: document.getElementById('displaySel'), num: document.getElementById('numSel'), label: document.getElementById('labelSel') };
+  const roleOk = { display: document.getElementById('displayOk'), num: document.getElementById('numOk'), label: document.getElementById('labelOk') };
+
+  function parseWeight(w) {
+    const nums = String(w).match(/\d+/g);
+    if (!nums) return /bold/.test(w) ? [700, 700] : [400, 400];
+    return [+nums[0], +(nums[1] || nums[0])];
+  }
+  function kitReady() {
+    return new Promise(res => {
+      const l = document.getElementById('kit');
+      if (l.sheet) return res(true);
+      l.addEventListener('load', () => res(true)); l.addEventListener('error', () => res(false));
+      setTimeout(() => res(null), 7000);
+    });
+  }
+  async function readKit() {
+    const map = new Map();
+    const add = (family, weight, style, stretch) => {
+      family = String(family || '').replace(/["']/g, '').trim(); if (!family) return;
+      const [w0, w1] = parseWeight(weight || 400);
+      const fc = { family, w0, w1, style: String(style || 'normal').trim(), stretch: (String(stretch || 'normal').trim().replace(/^100%$/, 'normal')) };
+      map.set(`${fc.family}|${w0}|${w1}|${fc.style}|${fc.stretch}`, fc);
+    };
+    await kitReady();
+    try {
+      const css = await (await fetch(KIT_URL)).text();
+      for (const m of css.matchAll(/@font-face\s*{([^}]*)}/g)) {
+        const b = m[1], get = k => (b.match(new RegExp(k + '\\s*:\\s*([^;]+)')) || [])[1];
+        add(get('font-family'), get('font-weight'), get('font-style'), get('font-stretch'));
+      }
+    } catch (e) { /* no CORS on the kit css: the font set below still lists it */ }
+    try { document.fonts.forEach(fc => add(fc.family, fc.weight, fc.style, fc.stretch)); } catch (e) {}
+    return [...map.values()].sort((a, b) => a.family.localeCompare(b.family) || a.w0 - b.w0);
+  }
+  const variable = fc => fc.w0 !== fc.w1;
+  const faceLabel = fc => `${fc.family} · ${variable(fc) ? `Variable ${fc.w0}–${fc.w1}` : (WEIGHTS[fc.w0] || fc.w0)}${fc.stretch !== 'normal' ? ' · ' + fc.stretch : ''}${fc.style !== 'normal' ? ' · ' + fc.style : ''}`;
+  const weightFor = (fc, role) => variable(fc) ? clamp(ROLE_W[role], fc.w0, fc.w1) : fc.w0;
+
+  function applyFont(role, fc, el = root) {
+    el.style.setProperty(`--${role}-family`, `"${fc.family}"`);
+    el.style.setProperty(`--${role}-weight`, weightFor(fc, role));
+    el.style.setProperty(`--${role}-stretch`, fc.stretch);
+    el.style.setProperty(`--${role}-style`, fc.style);
+  }
+  async function checkLoaded(role, fc) {
+    const spec = `${fc.style !== 'normal' ? fc.style + ' ' : ''}${weightFor(fc, role)} 40px "${fc.family}"`;
+    try { await document.fonts.load(spec, 'אבג123'); } catch (e) {}
+    const ok = document.fonts.check(spec, 'אבג123');
+    roleOk[role].textContent = ok ? '✓ נטען' : '✗ לא נטען';
+    roleOk[role].className = ok ? '' : 'bad';
+  }
+  function choose(role, idx) {
+    const fc = faces[idx]; if (!fc) return;
+    applyFont(role, fc); roleSel[role].value = idx;
+    checkLoaded(role, fc).then(layout);
+    try { localStorage.setItem('kalpi-font-' + role, faceLabel(fc)); } catch (e) {}
+  }
+  function pickDefault(pattern, targetW, preferWide) {
+    let best = -1, score = -1e9;
+    faces.forEach((fc, i) => {
+      if (fc.style !== 'normal') return;
+      let sc = pattern.test(fc.family) ? 1000 : 0;
+      if (preferWide && /extend|expand|wide/i.test(fc.family + fc.stretch)) sc += 100;
+      sc -= (targetW < fc.w0 ? fc.w0 - targetW : targetW > fc.w1 ? targetW - fc.w1 : 0) / 10;
+      if (sc > score) { score = sc; best = i; }
+    });
+    return best;
+  }
+  const numVars = document.getElementById('numVars');
+  numVars.addEventListener('input', () => root.style.setProperty('--num-vars', numVars.value.trim() || 'normal'));
+
+  async function initFonts() {
+    faces = await readKit();
+    const note = document.getElementById('kitNote');
+    if (!faces.length) {
+      note.textContent = 'הפונטים מהקיט לא נטענו. הקיט עובד בכל דומיין ובקובץ מקומי, אז כדאי לפתוח את הקובץ ישירות ב־Chrome ולא בתצוגה מקדימה.';
+      Object.values(roleSel).forEach(sel => { sel.innerHTML = '<option>אין פונטים</option>'; sel.disabled = true; });
+      return;
+    }
+    note.textContent = `בקיט: ${new Set(faces.map(fc => fc.family)).size} משפחות, ${faces.length} קבצים. ברירת המחדל לפי ה־Figma.`;
+    const opts = faces.map((fc, i) => `<option value="${i}">${faceLabel(fc)}</option>`).join('');
+    for (const [role, sel] of Object.entries(roleSel)) { sel.innerHTML = opts; sel.addEventListener('change', () => choose(role, +sel.value)); }
+    let saved = {};
+    try { for (const role of Object.keys(roleSel)) saved[role] = localStorage.getItem('kalpi-font-' + role); } catch (e) {}
+    const idxOf = lbl => lbl ? faces.findIndex(fc => faceLabel(fc) === lbl) : -1;
+    const def = { display: pickDefault(/levit/i, 900, true), num: pickDefault(/narkiss.?yair/i, 700), label: pickDefault(/narkiss.?yair/i, 400) };
+    for (const role of Object.keys(roleSel)) choose(role, idxOf(saved[role]) >= 0 ? idxOf(saved[role]) : def[role]);
+  }
+
+  // ---------- combos overlay: display face × counter family ----------
+  const combos = document.getElementById('combos'), grid = document.getElementById('combosGrid');
+  const boxImg = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(BOX_SVG);
+  function buildCombos() {
+    grid.innerHTML = '';
+    if (!faces.length) { grid.innerHTML = '<p>הפונטים מהקיט לא נטענו.</p>'; return; }
+    const fams = new Map();
+    faces.forEach((fc, i) => { if (fc.style === 'normal') (fams.get(fc.family + '|' + fc.stretch) || fams.set(fc.family + '|' + fc.stretch, []).get(fc.family + '|' + fc.stretch)).push(i); });
+    const groups = [...fams.values()];
+    const best = (g, w) => g.reduce((a, b) => { const da = Math.abs(clamp(w, faces[a].w0, faces[a].w1) - w), db = Math.abs(clamp(w, faces[b].w0, faces[b].w1) - w); return db < da ? b : a; });
+    const disp = groups.map(g => best(g, 900)), cnt = groups.map(g => [best(g, 700), best(g, 400)]);
+    document.getElementById('combosCount').textContent = `${disp.length * cnt.length} שילובים · קליק מחיל`;
+    for (const di of disp) for (const [ni, li] of cnt) {
+      const card = document.createElement('button');
+      card.type = 'button'; card.className = 'card';
+      if (+roleSel.display.value === di && +roleSel.num.value === ni && +roleSel.label.value === li) card.classList.add('current');
+      card.innerHTML = `<div class="mini"><img alt="" src="${boxImg}"><h2 class="headline">הוסיפו את הפתק שלכם</h2>
+        <div class="counter"><b>128</b><span>פתקים הצטרפו לגינה</span></div></div>
+        <div class="cap"><span>${faceLabel(faces[di])}</span><span>${faceLabel(faces[ni])}</span></div>`;
+      applyFont('display', faces[di], card); applyFont('num', faces[ni], card); applyFont('label', faces[li], card);
+      card.addEventListener('click', () => { choose('display', di); choose('num', ni); choose('label', li); closeCombos(); });
+      grid.appendChild(card);
+    }
+    grid.querySelectorAll('.mini').forEach(m => m.style.setProperty('--s', m.clientWidth / 1920));
+  }
+  function closeCombos() { combos.hidden = true; }
+  document.getElementById('openCombos').addEventListener('click', () => { combos.hidden = false; buildCombos(); });
+  document.getElementById('closeCombos').addEventListener('click', closeCombos);
+
+  let resizeTimer = 0;
+  addEventListener('resize', () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => { layout(); genGarden(); bloomTo(nGrow, performance.now()); }, 150);
+  });
+
+  // ---------- boot ----------
+  defineSpecies();
+  layout();
+  genGarden();
+  genSlot();
+  showCount();
+  syncMode();
+  initFonts();
+  requestAnimationFrame(frame);
+})();
+</script>
+<script type="module" src="live.js"></script>
+</body>
+</html>

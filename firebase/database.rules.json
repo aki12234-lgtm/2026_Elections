@@ -1,0 +1,12 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "votes": {
+      "count": {
+        ".read": true,
+        ".write": "newData.isNumber() && newData.val() === (data.exists() ? data.val() : 0) + 1"
+      }
+    }
+  }
+}
