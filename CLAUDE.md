@@ -23,7 +23,10 @@ Interactive web piece for Israel's 26th Knesset election: a visitor drops a note
 - From note 31, each note is one flower in a patch. `genGarden()` pre-assigns every note to a flower (`voteFlower[v]`), and a patch's radius grows just enough to hold its released flowers. At `goal` the ground is fully covered. The number of flowers on screen equals the shown count (live + `offset`). The review panel's mode line shows the real server count and the offset.
 - The garden (`nGrow`) chases the real count (`target`) one flower at a time: a seed flies from the box to the flower's spot. Jumps larger than 12 bloom in at once.
 - One note per page load (`voted`); a refresh allows another, as the owner asked.
-- Performance: plants are pre-rendered sprites. Settled shadows and windless plants (grass, clover, bush, fern, sabra) are painted once into static layers; grown flowers are a single image (stem + head).
+- Plants are modelled in 3D (x right, y toward the viewer, z up) and projected with the box's isometric camera, cel-shaded with the light that casts the box's shadow (`SUN`). Every outline is the box's 2.5 stroke on screen, so plants have no per-plant scale.
+- The bouquet's 30 flowers bend live: each stem is drawn per frame from the slot, heads and leaves are sprites carried along. Their shadow crosses the lid (clipped to it) and the rest lands on the ground past the box.
+- Wind (`sway()`) is a push in world x/y per unit of height: a shared gust plus each plant's own sway, so neighbours don't move as one.
+- Performance: garden plants are pre-rendered sprites. Settled shadows and windless plants (grass, clover, bush, fern, sabra) are painted once into static layers; grown flowers are a single image (stem + head).
 
 ## Review panel
 Add `?review` to the URL. Preset states, a slider, "the whole process" autoplay, wind, fonts. Everything in it is a local simulation; "חזרה לחי" returns to the live count.

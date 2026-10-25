@@ -263,7 +263,7 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; }
 </svg>`;
   const BOX_PARTS = [...BOX_SVG.matchAll(/<path d="([^"]+)" fill="([^"]+)"(?: stroke="([^"]+)" stroke-width="([^"]+)")?/g)]
     .map(m => ({ p: new Path2D(m[1]), fill: m[2] === 'white' ? WHITE : m[2], stroke: m[3], sw: m[4] ? +m[4] : 0 }));
-  const SHADOW_PART = BOX_PARTS[0], BODY_PARTS = BOX_PARTS.slice(1);
+  const SHADOW_PART = BOX_PARTS[0], BODY_PARTS = BOX_PARTS.slice(1), LID_TOP = BOX_PARTS[6];
 
   const f = (x, y) => ({ x: x + OFF.x, y: y + OFF.y });
   const A = f(14.978, 424.97), B = f(415.07, 655.97), C = f(655.112, 517.37), D = f(255.02, 286.37);
@@ -339,209 +339,322 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; }
     buildSprites();
   }
 
-  // ---------- vector drawing (local units = Figma px, base at 0,0, up is −y) ----------
+  // ---------- vector drawing ----------
   function paint(g, fill, sh, lw) {
     g.fillStyle = sh ? INK : fill; g.fill();
     if (lw) { g.lineWidth = lw; g.strokeStyle = INK; g.lineJoin = 'round'; g.lineCap = 'round'; g.stroke(); }
   }
-  function flat(g, x, y, build) { g.save(); g.translate(x, y); g.scale(1, ISO); g.beginPath(); build(); g.restore(); }
-  const quadPt = (p0, p1, p2, t) => ({ x: (1 - t) * (1 - t) * p0.x + 2 * (1 - t) * t * p1.x + t * t * p2.x, y: (1 - t) * (1 - t) * p0.y + 2 * (1 - t) * t * p1.y + t * t * p2.y });
-  function leafShape(g, x, y, L, ang, col, sh, lw) {
-    g.save(); g.translate(x, y); g.rotate(ang);
-    g.beginPath(); g.moveTo(0, 0); g.quadraticCurveTo(L * 0.5, -L * 0.36, L, 0); g.quadraticCurveTo(L * 0.5, L * 0.2, 0, 0);
-    g.restore(); paint(g, col, sh, lw);
-  }
-  function blob(g, circles, col, sh, lw) {   // union of circles with a single outline
-    if (lw) { g.beginPath(); circles.forEach(([x, y, r]) => { g.moveTo(x + r, y); g.arc(x, y, r, 0, TAU); }); g.lineWidth = lw * 2; g.strokeStyle = INK; g.stroke(); }
-    g.beginPath(); circles.forEach(([x, y, r]) => { g.moveTo(x + r, y); g.arc(x, y, r, 0, TAU); }); g.fillStyle = sh ? INK : col; g.fill();
-  }
 
-  // ---------- species: each variant = stem/body sprite (+ optional head sprite) ----------
-  const SPECIES = {};
-  function stemDraw(h, lean, leaves, lw) {
-    const p0 = { x: 0, y: 0 }, p1 = { x: lean * 0.15, y: -h * 0.55 }, p2 = { x: lean, y: -h };
-    return (g, sh) => {
-      g.beginPath(); g.moveTo(0, 0); g.quadraticCurveTo(p1.x, p1.y, p2.x, p2.y);
-      g.lineWidth = lw; g.strokeStyle = INK; g.lineCap = 'round'; g.stroke();
-      for (const lf of leaves) { const q = quadPt(p0, p1, p2, lf.t); leafShape(g, q.x, q.y, lf.L, lf.side > 0 ? -0.55 : Math.PI + 0.55, lf.col || GRASS, sh, 1.7); }
-    };
-  }
-  const stemBounds = (h, lean, L) => ({ x0: Math.min(0, lean) - L - 6, x1: Math.max(0, lean) + L + 6, y0: -h - 6, y1: 6 });
+  // ---------- plants are modelled in 3D ----------
+  // x → right, y → toward the viewer, z → up, in Figma px. They're seen the way the box is: an
+  // orthographic camera 35.26° above the ground. A plant part is a list of 3D shapes, back to
+  // front, that raster() projects twice: to the screen, and onto the ground as its shadow.
+  const SIN_E = ISO, COS_E = Math.sqrt(1 - ISO * ISO), Z = 1 / COS_E;   // a height of h·Z reads as h px tall
+  const add3 = (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
+  const sub3 = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+  const mul3 = (a, k) => [a[0] * k, a[1] * k, a[2] * k];
+  const dot3 = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+  const cross3 = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+  const norm3 = a => mul3(a, 1 / (Math.hypot(a[0], a[1], a[2]) || 1));
+  const UP = [0, 0, 1], EYE = [0, COS_E, SIN_E];                    // p·EYE grows toward the viewer
+  const SUN = norm3([-V.x * COS_E, -V.y * COS_E / ISO, 1]);          // toward the light that casts the box's shadow
+  const flatDir = az => [Math.cos(az), Math.sin(az), 0];
+  const dirAt = (az, tilt) => [Math.sin(tilt) * Math.cos(az), Math.sin(tilt) * Math.sin(az), Math.cos(tilt)];
+  function basis(n) { const u = norm3(cross3(Math.abs(n[2]) < 0.95 ? UP : [1, 0, 0], n)); return [u, cross3(n, u)]; }
+  const toScreen = p => [p[0], p[1] * SIN_E - p[2] * COS_E];
+  // shadow space: blit() lays sprite height along V, so a point drawn here lands on its own shadow
+  const toShadow = p => { const hy = p[1] * SIN_E / V.y; return [p[0] - V.x * hy, -(p[2] * COS_E + hy)]; };
+  // a point's shadow on the flat surface under it, relative to where the surface is (the bouquet's parts)
+  const toGround = p => [p[0] + p[2] * COS_E * V.x, p[1] * SIN_E + p[2] * COS_E * V.y];
+  const qb3 = (p0, p1, p2, t) => add3(add3(mul3(p0, (1 - t) * (1 - t)), mul3(p1, 2 * (1 - t) * t)), mul3(p2, t * t));
+  const curve3 = (p0, p1, p2, n) => Array.from({ length: n + 1 }, (_, i) => qb3(p0, p1, p2, i / n));
+  const ring3 = (c, u, w, rx, ry, n = 18) => Array.from({ length: n }, (_, i) => { const t = i / n * TAU; return add3(c, add3(mul3(u, Math.cos(t) * rx), mul3(w, Math.sin(t) * ry))); });
+  const depth = pts => pts.reduce((sum, p) => sum + dot3(p, EYE), 0) / pts.length;
+  const byDepth = list => list.sort((a, b) => a.z - b.z);
+  const group = (list, z) => list.map((it, j) => ({ ...it, z: z + j * 1e-4 }));   // sorts as one piece
+  const moved = (list, d) => list.map(it => ({ ...it, pts: it.pts && it.pts.map(p => add3(p, d)), c: it.c && add3(it.c, d), a: it.a && add3(it.a, d), b: it.b && add3(it.b, d) }));
 
-  function flatHead(type, R, col) {
-    const petals = [];
-    if (type === 'daisy') for (let i = 0; i < 12; i++) petals.push({ a: i / 12 * TAU, d: 0.55, rx: 0.45, ry: 0.16 });
-    if (type === 'anemone') for (let i = 0; i < 6; i++) petals.push({ a: i / 6 * TAU + 0.3, d: 0.45, rx: 0.42, ry: 0.42 });
-    if (type === 'five') for (let i = 0; i < 5; i++) petals.push({ a: i / 5 * TAU - 0.4, d: 0.48, rx: 0.38, ry: 0.3 });
-    petals.sort((m, n) => Math.sin(m.a) - Math.sin(n.a));
-    const center = type === 'daisy' ? [0.28, YEL] : type === 'anemone' ? [0.27, INK] : [0.19, WHITE];
-    return {
-      draw: (g, sh) => {
-        for (const q of petals) { flat(g, 0, 0, () => g.ellipse(Math.cos(q.a) * R * q.d, Math.sin(q.a) * R * q.d, R * q.rx, R * q.ry, q.a, 0, TAU)); paint(g, col, sh, 2); }
-        flat(g, 0, 0, () => g.arc(0, 0, R * center[0], 0, TAU)); paint(g, center[1], sh, 2);
-      },
-      bounds: { x0: -R * 1.05, x1: R * 1.05, y0: -R * 0.65, y1: R * 0.65 },
-    };
-  }
-  function tulipHead(R, col) {
-    const w = R * 0.56;
-    return {
-      draw: (g, sh) => {
-        g.beginPath(); g.moveTo(-w, -R * 0.75);
-        g.quadraticCurveTo(-w, 0, 0, 0); g.quadraticCurveTo(w, 0, w, -R * 0.75);
-        g.lineTo(w * 0.5, -R * 1.25); g.lineTo(0, -R * 0.85); g.lineTo(-w * 0.5, -R * 1.25); g.closePath();
-        paint(g, col, sh, 2);
-      },
-      bounds: { x0: -w - 3, x1: w + 3, y0: -R * 1.3 - 3, y1: 3 },
-    };
-  }
-  function sunHead(R) {
-    return {
-      draw: (g, sh) => {
-        for (let i = 0; i < 14; i++) { const a = i / 14 * TAU; g.beginPath(); g.ellipse(Math.cos(a) * R * 0.62, -R * 0.9 + Math.sin(a) * R * 0.62, R * 0.38, R * 0.15, a, 0, TAU); paint(g, YEL, sh, 2); }
-        g.beginPath(); g.arc(0, -R * 0.9, R * 0.42, 0, TAU); paint(g, INK, sh, 2);
-        if (!sh) { g.fillStyle = YEL; for (let i = 0; i < 7; i++) { const a = i / 7 * TAU; g.beginPath(); g.arc(Math.cos(a) * R * 0.22, -R * 0.9 + Math.sin(a) * R * 0.22, R * 0.05, 0, TAU); g.fill(); } }
-      },
-      bounds: { x0: -R * 1.1, x1: R * 1.1, y0: -R * 2, y1: R * 0.2 },
-    };
-  }
-  function puffHead(R) {
-    return {
-      draw: (g, sh) => {
-        g.beginPath(); g.arc(0, -R * 0.9, R, 0, TAU); paint(g, WHITE, sh, 1.6);
+  // cel shading: a face turned from the light takes its colour's shade
+  const SHADE = { [WHITE]: '#d2dcec', [YEL]: '#eea42e', [RED]: '#c92b34', [PINK]: '#de6a98', [ORANGE]: '#d75b1b', [BLUE]: '#1259b4', [TAN]: '#cd9d4a',
+    [GRASS]: GRASS_DK, [GRASS_DK]: '#1f7134', [BUSH]: '#2a7a3b', [TREE]: '#3b9744', [INK]: INK };
+  const shade = col => SHADE[col] || col;
+  const lit = (col, n, edge = -0.5) => dot3(n, SUN) * (dot3(n, EYE) < 0 ? -1 : 1) > edge ? col : shade(col);
+
+  // shapes: closed (fill null = outline only, lw 0 = fill only), an ink line, a shaded ball, a shaded capsule.
+  // Every outline is the box's 2.5 stroke on screen; ls scales it back for sprites drawn bigger (phones).
+  const LW = 2.5;
+  const shape = (pts, fill, lw = LW, z = depth(pts)) => ({ pts, fill, lw, z });
+  const wire = pts => ({ pts, lw: LW, open: true, z: depth(pts) });
+  const ball = (c, r, fill) => ({ c, r, fill, lw: LW, z: dot3(c, EYE) });
+  const rod = (a, b, r, fill) => ({ a, b, r, fill, lw: LW, z: depth([a, b]) });
+  const GLOW = toScreen(SUN);   // the lit side of a ball, on screen
+  // P: 3D point → 2D, for the plant or for its shadow
+  function drawList(g, list, sh, ls, P) {
+    for (const it of list) {
+      g.beginPath();
+      if (it.c) {
+        const [x, y] = P(it.c), r = it.r;
+        g.arc(x, y, r, 0, TAU); paint(g, shade(it.fill), sh, it.lw * ls);
+        if (!sh) { g.beginPath(); g.arc(x + GLOW[0] * r * 0.16, y + GLOW[1] * r * 0.16, r * 0.76, 0, TAU); g.fillStyle = it.fill; g.fill(); }
+      } else if (it.a) {
+        const [ax, ay] = P(it.a), [bx, by] = P(it.b), r = it.r;
+        g.moveTo(ax, ay); g.lineTo(bx, by); g.lineCap = 'round';
+        g.lineWidth = r * 2 + it.lw * ls; g.strokeStyle = INK; g.stroke();
         if (!sh) {
-          g.strokeStyle = INK; g.lineWidth = 1.2;
-          for (let i = 0; i < 14; i++) { const a = i / 14 * TAU; g.beginPath(); g.moveTo(Math.cos(a) * R * 0.2, -R * 0.9 + Math.sin(a) * R * 0.2); g.lineTo(Math.cos(a) * R * 0.75, -R * 0.9 + Math.sin(a) * R * 0.75); g.stroke(); }
+          g.lineWidth = r * 2 - it.lw * ls; g.strokeStyle = shade(it.fill); g.stroke();
+          const ox = GLOW[0] * r * 0.3, oy = GLOW[1] * r * 0.3;
+          g.beginPath(); g.moveTo(ax + ox, ay + oy); g.lineTo(bx + ox, by + oy); g.lineWidth = r * 1.1; g.strokeStyle = it.fill; g.stroke();
         }
-      },
-      bounds: { x0: -R - 3, x1: R + 3, y0: -R * 1.9 - 3, y1: 3 },
-    };
+      } else {
+        it.pts.forEach((p, i) => { const [x, y] = P(p); i ? g.lineTo(x, y) : g.moveTo(x, y); });
+        if (it.open) { g.lineWidth = it.lw * ls; g.strokeStyle = INK; g.lineCap = 'round'; g.lineJoin = 'round'; g.stroke(); continue; }
+        g.closePath();
+        if (it.fill) paint(g, it.fill, sh, it.lw * ls);
+        else if (!sh) { g.lineWidth = it.lw * ls; g.strokeStyle = INK; g.lineJoin = 'round'; g.stroke(); }
+      }
+    }
   }
-  function spikeHead(L, col) {
-    return {
-      draw: (g, sh) => {
-        const n = 7;
-        for (let i = 0; i < n; i++) { const t = i / (n - 1), y = -t * L, side = i % 2 ? 1 : -1, r = 5.5 * (1 - t * 0.45); g.beginPath(); g.ellipse(side * 3.2, y, r, r * 0.8, side * 0.5, 0, TAU); paint(g, col, sh, 1.6); }
-      },
-      bounds: { x0: -12, x1: 12, y0: -L - 9, y1: 7 },
-    };
+  function listBounds(list, P) {
+    const b = { x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity };
+    const grow = (p, m) => { const [x, y] = P(p); b.x0 = Math.min(b.x0, x - m); b.x1 = Math.max(b.x1, x + m); b.y0 = Math.min(b.y0, y - m); b.y1 = Math.max(b.y1, y + m); };
+    for (const it of list) {
+      const m = (it.lw || 0) / 2 + 1;
+      if (it.c) grow(it.c, it.r + m);
+      else if (it.a) { grow(it.a, it.r + m); grow(it.b, it.r + m); }
+      else it.pts.forEach(p => grow(p, m));
+    }
+    return b;
   }
 
+  // ---------- plant pieces ----------
+  // a leaf folded along its midrib, so its two halves catch the light differently
+  function leaf3(at, az, len, col) {
+    const out = flatDir(az), side = flatDir(az + Math.PI / 2);
+    const tip = add3(at, add3(mul3(out, len), [0, 0, len * 0.1])), ctl = add3(at, add3(mul3(out, len * 0.45), [0, 0, len * 0.5]));
+    const mid = curve3(at, ctl, tip, 8), ax = sub3(tip, at);
+    return byDepth([-1, 1].map(sd => {
+      const fold = add3(mul3(side, sd * 0.9), [0, 0, 0.45]);
+      const edge = mid.map((p, i) => add3(p, mul3(fold, len * 0.2 * Math.sin(Math.PI * i / 8))));
+      return shape([...mid, ...edge.reverse()], lit(col, cross3(ax, fold), 0.35));
+    }));
+  }
+  // a grass blade: a tapering ribbon that rises and bends out along az
+  function blade(base, az, h, lean, w, col) {
+    const out = flatDir(az), side = flatDir(az + Math.PI / 2);
+    const tip = add3(base, add3(mul3(out, lean), [0, 0, h])), ctl = add3(base, add3(mul3(out, lean * 0.2), [0, 0, h * 0.6]));
+    const mid = curve3(base, ctl, tip, 6);
+    const edge = sd => mid.map((p, i) => add3(p, mul3(side, sd * w / 2 * (1 - i / 6))));
+    return shape([...edge(-1), ...edge(1).reverse()], lit(col, cross3(sub3(tip, base), side), -0.65), LW, dot3(base, EYE));
+  }
+  // a bell hanging from `top`: a flared cup with a scalloped rim, shaded on its right half
+  function bell(top, col) {
+    const rb = 5.4, bh = 10 * Z, n = 8;
+    const prof = i => [rb * (0.3 + 0.7 * Math.sin(i / n * Math.PI / 2)), top[2] - i / n * bh];
+    const side = sd => Array.from({ length: n + 1 }, (_, i) => { const [rr, z] = prof(i); return [top[0] + sd * rr, top[1], z]; });
+    const front = Array.from({ length: n + 1 }, (_, i) => { const [rr, z] = prof(i); return [top[0], top[1] + rr, z]; });
+    const rim = (a0, a1) => Array.from({ length: 13 }, (_, i) => { const a = a0 + (a1 - a0) * i / 12; return [top[0] + rb * Math.cos(a), top[1] + rb * Math.sin(a), top[2] - bh - 2.4 * Math.abs(Math.sin(a * 3))]; });
+    const all = [...side(-1), ...rim(Math.PI, 0), ...side(1).reverse()];
+    return [shape(all, col, 0), shape([...front, ...rim(Math.PI / 2, 0), ...side(1).reverse()], shade(col), 0), shape(all, null)];
+  }
+
+  // ---------- flower heads (built around the stem tip, facing n) ----------
+  // rings: [petals, distance, length, width, turn, underneath]
+  const HEADS = {
+    daisy: { rings: [[10, 0.56, 0.44, 0.2, 0]], center: [0.28, YEL], cup: 0.22 },
+    anemone: { rings: [[6, 0.45, 0.42, 0.42, 0.3]], center: [0.27, INK], cup: 0.35 },
+    five: { rings: [[5, 0.48, 0.38, 0.3, -0.4]], center: [0.19, WHITE], cup: 0.3 },
+    sun: { rings: [[14, 0.6, 0.36, 0.14, 0.22, true], [14, 0.64, 0.38, 0.13, 0]], center: [0.42, INK], cup: 0.12, seeds: true },
+  };
+  function discHead(spec, R, col, n) {
+    const [u, w] = basis(n), cup = spec.cup;
+    const inPlane = (x, y, lift = 0) => add3(add3(mul3(u, x), mul3(w, y)), mul3(n, cup * (x * x + y * y) / R + lift));
+    const petals = [];
+    for (const [np, d, rx, ry, turn, under] of spec.rings) for (let i = 0; i < np; i++) {
+      const a = i / np * TAU + turn, ca = Math.cos(a), sa = Math.sin(a), pts = [];
+      for (let j = 0; j < 14; j++) {
+        const t = j / 14 * TAU, x = R * (d + Math.cos(t) * rx), y = R * Math.sin(t) * ry;
+        pts.push(inPlane(x * ca - y * sa, x * sa + y * ca, under ? -R * 0.06 : 0));
+      }
+      const pn = norm3(sub3(n, mul3(add3(mul3(u, ca), mul3(w, sa)), cup * 2 * d)));
+      petals.push(shape(pts, under ? shade(col) : lit(col, pn, -0.3)));
+    }
+    byDepth(petals);
+    // the centre is a low dome: its shade, then a lit cap nudged toward the light
+    const [rc, cc] = spec.center, mid = mul3(n, R * 0.05), toSun = norm3(sub3(SUN, mul3(n, dot3(SUN, n))));
+    const centre = [shape(ring3(mid, u, w, R * rc, R * rc, 16), shade(cc))];
+    if (cc !== INK) centre.push(shape(ring3(add3(mul3(n, R * 0.09), mul3(toSun, R * rc * 0.2)), u, w, R * rc * 0.72, R * rc * 0.72, 14), cc, 0));
+    if (spec.seeds) for (let i = 0; i < 8; i++) {
+      const a = i / 7 * TAU, rr = i === 7 ? 0 : R * 0.22;
+      centre.push(shape(ring3(add3(mul3(n, R * 0.07), add3(mul3(u, Math.cos(a) * rr), mul3(w, Math.sin(a) * rr))), u, w, R * 0.05, R * 0.05, 8), YEL, 0));
+    }
+    if (dot3(n, EYE) >= 0) return [...petals, ...centre];
+    // seen from behind: the petals' backs and a green calyx where the stem meets them
+    return [...centre, ...petals, shape(ring3(mul3(n, -R * 0.08), u, w, R * 0.24, R * 0.24, 12), lit(GRASS, n))];
+  }
+  // a cup of six petals around n: the far ones show their inside, the near ones their outside
+  function tulipHead(R, col, n) {
+    const [u, w] = basis(n), petals = [];
+    const rad = a => add3(mul3(u, Math.cos(a)), mul3(w, Math.sin(a)));
+    for (let k = 0; k < 6; k++) {
+      const phi = k / 6 * TAU + 0.3, sc = k % 2 ? 0.86 : 1, pts = [];
+      const P = (s, v) => {   // s across the petal (−1…1), v up it (0…1)
+        const half = 0.62 * (1 - Math.pow(v, 2.2)), rr = R * sc * (0.12 + 0.5 * Math.sin(Math.PI * (0.1 + 0.75 * v)));
+        return add3(mul3(n, R * 1.25 * sc * v), mul3(rad(phi + s * half), rr));
+      };
+      for (let i = 0; i <= 8; i++) pts.push(P(-1, i / 8));
+      for (let i = 8; i >= 0; i--) pts.push(P(1, i / 8));
+      petals.push(shape(pts, dot3(rad(phi), EYE) >= 0 ? lit(col, rad(phi), -0.3) : shade(col)));
+    }
+    return byDepth(petals);
+  }
+  // a dandelion clock: a sphere with seed lines on its near half
+  function puffHead(R, n) {
+    const c = mul3(n, R * 0.9), L = [ball(c, R, WHITE)];
+    for (let i = 0; i < 14; i++) {
+      const zf = 1 - (i + 0.5) / 7, rr = Math.sqrt(Math.max(0, 1 - zf * zf)), th = i * 2.39996, d = [rr * Math.cos(th), rr * Math.sin(th), zf];
+      if (dot3(d, EYE) > 0.15) L.push(wire([add3(c, mul3(d, R * 0.2)), add3(c, mul3(d, R * 0.72))]));
+    }
+    return L;
+  }
+  // a spike of florets spiralling up along n
+  function spikeHead(len, col, n) {
+    const [u, w] = basis(n), L = [];
+    for (let i = 0; i < 11; i++) {
+      const t = i / 10, a = i * 2.4, k = 1 - t * 0.5, off = len * 0.09 * k;
+      L.push(ball(add3(mul3(n, t * len), add3(mul3(u, Math.cos(a) * off), mul3(w, Math.sin(a) * off))), len * 0.13 * k, col));
+    }
+    return byDepth(L);
+  }
+
+  // a flower: a stem curving out along (tilt, az), a leaf or two, and a head at the tip facing n.
+  // `look` turns the head toward the viewer, the way sunflowers face the sun.
+  const FLOWERS = {
+    daisy: { head: (r, R, n) => discHead(HEADS.daisy, R, WHITE, n), look: 0.35 },
+    anemone: { head: (r, R, n) => discHead(HEADS.anemone, R, RED, n), look: 0.35 },
+    five: { head: (r, R, n, i) => discHead(HEADS.five, R, [YEL, BLUE, PINK, ORANGE][i % 4], n), look: 0.3 },
+    tulip: { head: (r, R, n, i) => tulipHead(R, [PINK, RED, YEL, ORANGE][i % 4], n), twoLeaves: true },
+    sunflower: { head: (r, R, n) => discHead(HEADS.sun, R, YEL, n), h: [85, 125], R: [18, 24], flex: 0.45, twoLeaves: true, look: 0.7 },
+    puff: { head: (r, R, n) => puffHead(R * 0.6, n), h: [50, 72], R: [12, 16], flex: 1 },
+    spike: { head: (r, R, n, i) => spikeHead(R * 2.2, i % 2 ? BLUE : PINK, n), h: [35, 55], flex: 0.9 },
+  };
+  function flowerVariant(r, o, i, tilt = r() * 0.4, az = r() * TAU) {
+    const span = ([a, b]) => a + r() * (b - a);
+    const h = span(o.h || [45, 70]) * Z, R = span(o.R || [12, 20]);
+    const p0 = [0, 0, 0], p2 = mul3(dirAt(az, tilt), h), p1 = [p2[0] * 0.4, p2[1] * 0.4, p2[2] * 0.6];   // leans from the base, arcs out at the top
+    const look = o.look || 0, jit = [r() - 0.5, r() - 0.5, r() - 0.5];
+    const n = norm3(add3(add3(mul3(norm3(sub3(p2, p1)), 1 - look), mul3(EYE, look)), mul3(jit, 0.5)));
+    const leaves = [{ t: 0.3 + r() * 0.15, az: r() * TAU, L: R * 1.3 }];
+    if (o.twoLeaves || r() < 0.3) leaves.push({ t: 0.12 + r() * 0.1, az: leaves[0].az + Math.PI + (r() - 0.5) * 0.8, L: R * 1.1 });
+    // each leaf is kept around its own attachment point, so the bouquet can move it with the stem
+    const lvs = leaves.map(lf => ({ at: qb3(p0, p1, p2, lf.t), front: Math.sin(lf.az) >= 0, part: { list: leaf3([0, 0, 0], lf.az, lf.L, GRASS) } }));
+    const side = front => lvs.filter(l => l.front === front).flatMap(l => moved(l.part.list, l.at));
+    const stem = curve3(p0, p1, p2, 12), body = [...side(false), wire(stem), ...side(true)];
+    const head = o.head(r, R, n, i), atTip = moved(head, p2), pt = ([x, y]) => ({ x, y });
+    const headFirst = dot3(n, EYE) < 0;   // a head turned away hides behind its stem
+    return { flex: o.flex || 0.75, top: p2, headFirst, stem, leaves: lvs, tip: pt(toScreen(p2)), stip: pt(toShadow(p2)), body: { list: body }, head: { list: head },
+      full: { list: headFirst ? [...atTip, ...body] : [...body, ...atTip] } };
+  }
+
+  // ---------- species: each variant = body (+ head, + full = both, for flowers) ----------
+  const SPECIES = {};
   function addSpecies(name, n, make) { SPECIES[name] = []; const r = mulberry(name.length * 7919 + n); for (let i = 0; i < n; i++) SPECIES[name].push(make(r, i)); }
 
   function defineSpecies() {
-    addSpecies('grass', 10, r => {
-      const nb = 3 + Math.floor(r() * 4), col = r() < 0.6 ? GRASS : GRASS_DK, blades = [];
-      for (let k = 0; k < nb; k++) blades.push({ x: (k - (nb - 1) / 2) * 4 + (r() - 0.5) * 3, h: 12 + r() * 24, lean: (k - (nb - 1) / 2) * 3.5 + (r() - 0.5) * 6, w: 4 + r() * 2.5 });
-      return { flex: 1.1, body: { bounds: { x0: -32, x1: 32, y0: -44, y1: 4 }, draw: (g, sh) => {
-        for (const b of blades) { g.beginPath(); g.moveTo(b.x - b.w / 2, 0); g.quadraticCurveTo(b.x - b.w / 2 + b.lean * 0.2, -b.h * 0.6, b.x + b.lean, -b.h); g.quadraticCurveTo(b.x + b.w / 2 + b.lean * 0.2, -b.h * 0.5, b.x + b.w / 2, 0); g.closePath(); paint(g, col, sh, 1.8); }
-      } } };
+    addSpecies('grass', 12, r => {
+      const nb = 4 + Math.floor(r() * 4), col = r() < 0.6 ? GRASS : GRASS_DK, L = [];
+      for (let k = 0; k < nb; k++) { const az = r() * TAU; L.push(blade(mul3(flatDir(az), 2 + r() * 5), az + (r() - 0.5) * 1.2, (12 + r() * 24) * Z, 4 + r() * 10, 6 + r() * 3, col)); }
+      return { flex: 1.1, body: { list: byDepth(L) } };
     });
-    addSpecies('reed', 4, r => {
-      const blades = [0, 1, 2].map(k => ({ x: (k - 1) * 5, h: 38 + r() * 34, lean: (k - 1) * 7 + (r() - 0.5) * 8 }));
-      const stalk = { h: 60 + r() * 22, lean: (r() - 0.5) * 12 };
-      return { flex: 1.3, body: { bounds: { x0: -34, x1: 34, y0: -96, y1: 4 }, draw: (g, sh) => {
-        for (const b of blades) { g.beginPath(); g.moveTo(b.x - 2.5, 0); g.quadraticCurveTo(b.x + b.lean * 0.2, -b.h * 0.6, b.x + b.lean, -b.h); g.quadraticCurveTo(b.x + 2.5 + b.lean * 0.2, -b.h * 0.5, b.x + 2.5, 0); g.closePath(); paint(g, GRASS_DK, sh, 1.6); }
-        g.beginPath(); g.moveTo(0, 0); g.quadraticCurveTo(stalk.lean * 0.2, -stalk.h * 0.6, stalk.lean, -stalk.h); g.lineWidth = 1.8; g.strokeStyle = INK; g.stroke();
-        g.beginPath(); g.ellipse(stalk.lean, -stalk.h - 7, 3.6, 9, stalk.lean * 0.01, 0, TAU); paint(g, TAN, sh, 1.6);
-      } } };
+    addSpecies('reed', 6, r => {
+      const L = [];
+      for (let k = 0; k < 3; k++) { const az = r() * TAU; L.push(blade(mul3(flatDir(az), 3), az, (38 + r() * 34) * Z, 5 + r() * 9, 6, GRASS_DK)); }
+      const top = mul3(dirAt(r() * TAU, r() * 0.18), (60 + r() * 22) * Z), ctl = [top[0] * 0.2, top[1] * 0.2, top[2] * 0.6], T = norm3(sub3(top, ctl));
+      L.push(wire(curve3([0, 0, 0], ctl, top, 8)), rod(add3(top, mul3(T, 2)), add3(top, mul3(T, 15)), 4, TAN));
+      return { flex: 1.3, body: { list: byDepth(L) } };
     });
-    addSpecies('clover', 4, r => {
-      const sprigs = []; const n = 3 + Math.floor(r() * 3);
-      for (let k = 0; k < n; k++) sprigs.push({ x: (r() - 0.5) * 22, h: 7 + r() * 10 });
-      const flower = r() < 0.45;
-      return { flex: 0.5, body: { bounds: { x0: -26, x1: 26, y0: -32, y1: 6 }, draw: (g, sh) => {
-        for (const sp of sprigs) {
-          g.beginPath(); g.moveTo(sp.x, 0); g.lineTo(sp.x, -sp.h); g.lineWidth = 1.5; g.strokeStyle = INK; g.stroke();
-          for (let i = 0; i < 3; i++) { const a = i / 3 * TAU - Math.PI / 2; flat(g, sp.x, -sp.h, () => g.arc(Math.cos(a) * 4.2, Math.sin(a) * 4.2, 4.4, 0, TAU)); paint(g, GRASS, sh, 1.5); }
+    addSpecies('clover', 6, r => {
+      const L = [], sprigs = [], n = 3 + Math.floor(r() * 3);
+      for (let k = 0; k < n; k++) sprigs.push([(r() - 0.5) * 22, (r() - 0.5) * 16, (7 + r() * 10) * Z]);
+      for (const top of sprigs) {
+        const leaves = [], turn = r() * TAU;
+        for (let i = 0; i < 3; i++) {   // three leaflets, drooping a little outward
+          const d = flatDir(turn + i / 3 * TAU), nrm = norm3(add3(UP, mul3(d, 0.45))), [u, w] = basis(nrm);
+          leaves.push(shape(ring3(add3(top, mul3(d, 4.2)), u, w, 4.6, 4.6, 14), lit(GRASS, nrm)));
         }
-        if (flower) { const sp = sprigs[0]; g.beginPath(); g.moveTo(sp.x + 2, 0); g.lineTo(sp.x + 3, -sp.h - 9); g.lineWidth = 1.5; g.stroke(); g.beginPath(); g.arc(sp.x + 3, -sp.h - 12, 4.5, 0, TAU); paint(g, WHITE, sh, 1.5); }
-      } } };
+        L.push(...group([wire([[top[0], top[1], 0], top]), ...byDepth(leaves)], dot3(top, EYE)));
+      }
+      if (r() < 0.45) { const [x, y, h] = sprigs[0]; L.push(...group([wire([[x + 2, y, 0], [x + 3, y, h + 9 * Z]]), ball([x + 3, y, h + 12 * Z], 5, WHITE)], dot3(sprigs[0], EYE) + 0.5)); }
+      return { flex: 0.5, body: { list: byDepth(L) } };
     });
-    addSpecies('bush', 6, r => {
-      const Wd = 40 + r() * 34, Hh = 30 + r() * 26;
-      const circles = [[-Wd * 0.28, -Hh * 0.4, Wd * 0.3], [Wd * 0.28, -Hh * 0.38, Wd * 0.3], [0, -Hh * 0.62, Wd * 0.33], [-Wd * 0.06, -Hh * 0.3, Wd * 0.3]];
-      const dots = []; const dc = [WHITE, PINK, YEL][Math.floor(r() * 3)];
-      if (r() < 0.65) for (let i = 0; i < 5; i++) dots.push([(r() - 0.5) * Wd * 0.8, -Hh * (0.3 + r() * 0.5)]);
-      return { flex: 0.12, body: { bounds: { x0: -Wd * 0.75, x1: Wd * 0.75, y0: -Hh * 0.62 - Wd * 0.36 - 4, y1: Wd * 0.05 + 6 }, draw: (g, sh) => {
-        blob(g, circles, BUSH, sh, 2);
-        for (const [x, y] of dots) { g.beginPath(); g.arc(x, y, 3.4, 0, TAU); paint(g, dc, sh, 1.4); }
-      } } };
+    addSpecies('bush', 8, r => {
+      const Wd = 40 + r() * 34, Hh = 30 + r() * 26, L = [], turn = r() * TAU;
+      const balls = [0, 1, 2, 3].map(i => { const d = flatDir(turn + i / 4 * TAU); return [d[0] * Wd * 0.27, d[1] * Wd * 0.27, Hh * 0.38 * Z, Wd * 0.3 * (0.9 + r() * 0.2)]; });
+      balls.push([0, 0, Hh * 0.66 * Z, Wd * 0.33]);
+      const dc = [WHITE, PINK, YEL][Math.floor(r() * 3)], dots = r() < 0.65;
+      for (const [x, y, z, R] of balls) {
+        const c = [x, y, z], parts = [ball(c, R, BUSH)];
+        if (dots) for (let j = 0; j < 2; j++) parts.push(ball(add3(c, mul3(norm3(add3([r() - 0.5, r() - 0.5, r() - 0.3], EYE)), R * 0.8)), 4.2, dc));
+        L.push(...group(parts, dot3(c, EYE)));
+      }
+      return { flex: 0.12, body: { list: byDepth(L) } };
     });
-    addSpecies('fern', 3, r => {
-      const fr = [];
-      for (let k = 0; k < 6; k++) fr.push({ a: -1.25 + k / 5 * 2.5 + (r() - 0.5) * 0.2, L: 30 + r() * 16 });
-      return { flex: 0.7, body: { bounds: { x0: -56, x1: 56, y0: -52, y1: 6 }, draw: (g, sh) => {
-        for (const q of fr) {
-          const p0 = { x: 0, y: 0 }, p2 = { x: Math.sin(q.a) * q.L, y: -Math.cos(q.a) * q.L * 0.75 }, p1 = { x: Math.sin(q.a) * q.L * 0.4, y: -q.L * 0.9 };
-          g.beginPath(); g.moveTo(0, 0); g.quadraticCurveTo(p1.x, p1.y, p2.x, p2.y); g.lineWidth = 1.5; g.strokeStyle = INK; g.stroke();
-          for (let t = 0.25; t < 0.95; t += 0.14) { const p = quadPt(p0, p1, p2, t); g.beginPath(); g.ellipse(p.x, p.y, 4.6 * (1.1 - t), 2.4, q.a + (t * 10 % 2 > 1 ? 0.9 : -0.9), 0, TAU); paint(g, GRASS_DK, sh, 1.3); }
+    addSpecies('fern', 4, r => {
+      const L = [], turn = r() * TAU;
+      for (let k = 0; k < 7; k++) {   // fronds arch up and out all around, leaflets along both sides
+        const out = flatDir(turn + k / 7 * TAU + (r() - 0.5) * 0.4), len = 30 + r() * 16;
+        const p0 = [0, 0, 0], p1 = add3(mul3(out, len * 0.35), [0, 0, len * 0.9 * Z]), p2 = add3(mul3(out, len), [0, 0, len * 0.3]);
+        const frond = [wire(curve3(p0, p1, p2, 10))];
+        for (let t = 0.25; t < 0.95; t += 0.18) {
+          const p = qb3(p0, p1, p2, t), tan = norm3(sub3(qb3(p0, p1, p2, t + 0.02), p)), side = norm3(cross3(tan, UP)), ll = 12 * (1.1 - t);
+          for (const sd of [-1, 1]) {
+            const ax = norm3(add3(add3(mul3(side, sd), mul3(tan, 0.35)), [0, 0, 0.3])), wv = norm3(cross3(cross3(ax, tan), ax));
+            frond.push(shape(ring3(add3(p, mul3(ax, ll * 0.5)), ax, wv, ll * 0.5, 3.4, 10), lit(GRASS_DK, cross3(ax, tan))));
+          }
         }
-      } } };
+        L.push(...group(frond, dot3(qb3(p0, p1, p2, 0.6), EYE)));
+      }
+      return { flex: 0.7, body: { list: byDepth(L) } };
     });
-    addSpecies('bells', 3, r => {
-      const h = 45 + r() * 20, col = r() < 0.5 ? WHITE : BLUE, side = r() < 0.5 ? 1 : -1;
-      const p0 = { x: 0, y: 0 }, p1 = { x: side * 4, y: -h * 1.1 }, p2 = { x: side * h * 0.45, y: -h * 0.82 };
-      return { flex: 0.8, body: { bounds: { x0: -h * 0.6 - 12, x1: h * 0.6 + 12, y0: -h * 1.1, y1: 6 }, draw: (g, sh) => {
-        g.beginPath(); g.moveTo(0, 0); g.quadraticCurveTo(p1.x, p1.y, p2.x, p2.y); g.lineWidth = 1.7; g.strokeStyle = INK; g.stroke();
-        leafShape(g, 0, -h * 0.25, 16, side > 0 ? Math.PI + 0.6 : -0.6, GRASS, sh, 1.5);
-        for (const t of [0.55, 0.75, 0.95]) { const p = quadPt(p0, p1, p2, t); g.beginPath(); g.moveTo(p.x - 5, p.y + 10); g.quadraticCurveTo(p.x - 5, p.y, p.x, p.y); g.quadraticCurveTo(p.x + 5, p.y, p.x + 5, p.y + 10); g.lineTo(p.x + 2, p.y + 8); g.lineTo(p.x, p.y + 11); g.lineTo(p.x - 2, p.y + 8); g.closePath(); paint(g, col, sh, 1.5); }
-      } } };
+    addSpecies('bells', 4, r => {
+      const h = 45 + r() * 20, col = r() < 0.5 ? WHITE : BLUE, az = r() * TAU, out = flatDir(az);
+      const p0 = [0, 0, 0], p1 = add3(mul3(out, 4), [0, 0, h * 1.1 * Z]), p2 = add3(mul3(out, h * 0.45), [0, 0, h * 0.82 * Z]);
+      const L = [...leaf3(qb3(p0, p1, p2, 0.25), az + Math.PI + 0.3, 16, GRASS), wire(curve3(p0, p1, p2, 10))];
+      for (const t of [0.55, 0.75, 0.95]) L.push(...bell(qb3(p0, p1, p2, t), col));
+      return { flex: 0.8, body: { list: L } };
     });
-    addSpecies('sabra', 2, r => {
-      const pads = [[0, -16, 10, 16, 0], [-10, -40, 8, 12, -0.45], [10, -38, 8.5, 12.5, 0.4], [1, -60, 7, 10, 0.05]];
-      const fruit = [[-14, -52], [16, -50], [4, -72]];
-      return { flex: 0.03, body: { bounds: { x0: -30, x1: 30, y0: -82, y1: 6 }, draw: (g, sh) => {
-        for (const [x, y, rx, ry, a] of pads) { g.beginPath(); g.ellipse(x, y, rx, ry, a, 0, TAU); paint(g, TREE, sh, 1.8); }
-        if (!sh) { g.fillStyle = INK; for (const [x, y] of pads) for (let i = 0; i < 3; i++) { g.beginPath(); g.arc(x + (i - 1) * 4, y + (i % 2 ? -4 : 3), 0.9, 0, TAU); g.fill(); } }
-        for (const [x, y] of fruit) { g.beginPath(); g.ellipse(x, y, 3.4, 4.6, 0, 0, TAU); paint(g, ORANGE, sh, 1.5); }
-      } } };
+    addSpecies('sabra', 3, r => {
+      const L = [];
+      // pads: [x, y, height, rx, ry, roll]; each faces its own way and has a thickness
+      for (const [x, y, zh, rx, ry, roll] of [[0, 0, 16, 10, 16, 0], [-10, -2, 40, 8, 12, -0.45], [10, 2, 38, 8.5, 12.5, 0.4], [1, -1, 60, 7, 10, 0.05]]) {
+        const nrm = norm3([...flatDir(r() * TAU).slice(0, 2), (r() - 0.5) * 0.3]), u0 = norm3(cross3(UP, nrm)), w0 = cross3(nrm, u0);
+        const u = add3(mul3(u0, Math.cos(roll)), mul3(w0, Math.sin(roll))), w = add3(mul3(u0, -Math.sin(roll)), mul3(w0, Math.cos(roll)));
+        const c = [x, y, zh * Z], f = dot3(nrm, EYE) < 0 ? -1 : 1, face = add3(c, mul3(nrm, f * 1.5));
+        const pad = [shape(ring3(add3(c, mul3(nrm, -f * 1.5)), u, w, rx, ry, 20), shade(TREE)), shape(ring3(face, u, w, rx, ry, 20), lit(TREE, nrm))];
+        for (const [a, b] of [[-0.4, -0.3], [0, 0.35], [0.4, -0.25]]) pad.push(shape(ring3(add3(add3(face, mul3(u, a * rx)), mul3(w, b * ry)), u, w, 0.9, 0.9, 6), INK, 0));
+        if (zh > 16) pad.push(ball(add3(c, mul3(w, ry + 2)), 4, ORANGE));
+        L.push(...group(pad, dot3(c, EYE)));
+      }
+      return { flex: 0.03, body: { list: byDepth(L) } };
     });
-    const flowerSpecies = (name, n, headFn, opts = {}) => addSpecies(name, n, (r, i) => {
-      const h = (opts.h || [45, 70])[0] + r() * ((opts.h || [45, 70])[1] - (opts.h || [45, 70])[0]);
-      const lean = (r() - 0.5) * h * 0.4;
-      const R = (opts.R || [10, 18])[0] + r() * ((opts.R || [10, 18])[1] - (opts.R || [10, 18])[0]);
-      const leaves = [{ t: 0.3 + r() * 0.15, side: r() < 0.5 ? 1 : -1, L: R * 1.3 }];
-      if (opts.twoLeaves || r() < 0.3) leaves.push({ t: 0.12 + r() * 0.1, side: -leaves[0].side, L: R * 1.1 });
-      return { flex: opts.flex || 0.75, tip: { x: lean, y: -h }, body: { bounds: stemBounds(h, lean, R * 1.4), draw: stemDraw(h, lean, leaves, opts.lw || 2.3) }, head: headFn(r, R, i) };
-    });
-    flowerSpecies('daisy', 4, (r, R) => flatHead('daisy', R, WHITE));
-    flowerSpecies('anemone', 4, (r, R) => flatHead('anemone', R, RED));
-    flowerSpecies('five', 8, (r, R, i) => flatHead('five', R, [YEL, BLUE, PINK, ORANGE][i % 4]));
-    flowerSpecies('tulip', 4, (r, R, i) => tulipHead(R, [PINK, RED, YEL, ORANGE][i % 4]), { twoLeaves: true });
-    flowerSpecies('sunflower', 3, (r, R) => sunHead(R), { h: [85, 125], R: [16, 22], flex: 0.45, twoLeaves: true, lw: 2.6 });
-    flowerSpecies('puff', 3, (r, R) => puffHead(R * 0.6), { h: [50, 72], R: [12, 16], flex: 1 });
-    flowerSpecies('spike', 4, (r, R, i) => spikeHead(26 + r() * 12, i % 2 ? BLUE : PINK), { h: [35, 55], flex: 0.9 });
-    // long-stemmed versions for the bouquet that fills the box
-    const tall = { h: [110, 250], R: [17, 27], lw: 2.5, flex: 0.55 };
-    flowerSpecies('s_daisy', 6, (r, R) => flatHead('daisy', R, WHITE), tall);
-    flowerSpecies('s_anemone', 6, (r, R) => flatHead('anemone', R, RED), tall);
-    flowerSpecies('s_five', 8, (r, R, i) => flatHead('five', R, [YEL, BLUE, PINK, ORANGE][i % 4]), tall);
-    flowerSpecies('s_tulip', 4, (r, R, i) => tulipHead(R, [PINK, RED, YEL, ORANGE][i % 4]), { ...tall, twoLeaves: true });
-    flowerSpecies('s_sun', 3, (r, R) => sunHead(R), { ...tall, R: [20, 26], twoLeaves: true });
-    flowerSpecies('s_spike', 4, (r, R, i) => spikeHead(40 + r() * 16, i % 2 ? BLUE : PINK), tall);
-    flowerSpecies('s_puff', 3, (r, R) => puffHead(R * 0.62), tall);
+    for (const [name, o] of Object.entries(FLOWERS)) addSpecies(name, 8, (r, i) => flowerVariant(r, o, i));
   }
 
-  // render every variant into bitmaps at the current scale
+  // render every variant into bitmaps at the current scale: the plant, and its shadow
   let SPR = 1;
-  function raster(part) {
-    const pad = 4, b = part.bounds, k = SPR;
-    const w = Math.max(1, Math.ceil((b.x1 - b.x0 + pad * 2) * k)), h = Math.max(1, Math.ceil((b.y1 - b.y0 + pad * 2) * k));
-    const mk = sh => { const c = document.createElement('canvas'); c.width = w; c.height = h; const g = c.getContext('2d'); g.setTransform(k, 0, 0, k, (pad - b.x0) * k, (pad - b.y0) * k); part.draw(g, sh); return c; };
-    part.img = mk(false); part.sil = mk(true); part.ax = pad - b.x0; part.ay = pad - b.y0;
+  function raster(part, ls, toSh = toShadow) {
+    const pad = 4, k = SPR;
+    const mk = sh => {
+      const P = sh ? toSh : toScreen, b = listBounds(part.list, P), c = document.createElement('canvas');
+      c.width = Math.max(1, Math.ceil((b.x1 - b.x0 + pad * 2) * k)); c.height = Math.max(1, Math.ceil((b.y1 - b.y0 + pad * 2) * k));
+      const g = c.getContext('2d'); g.setTransform(k, 0, 0, k, (pad - b.x0) * k, (pad - b.y0) * k); drawList(g, part.list, sh, ls, P);
+      return { c, ax: pad - b.x0, ay: pad - b.y0 };
+    };
+    part.img = mk(false); part.sil = mk(true);
   }
   function buildSprites() {
     SPR = DPR * s * 1.25 * PLANT_K;
-    for (const list of Object.values(SPECIES)) for (const v of list) {
-      raster(v.body);
-      if (!v.head) continue;
-      raster(v.head);
-      const b = v.body.bounds, h = v.head.bounds, tx = v.tip.x, ty = v.tip.y;
-      v.full = v.full || { bounds: { x0: Math.min(b.x0, tx + h.x0), x1: Math.max(b.x1, tx + h.x1), y0: Math.min(b.y0, ty + h.y0), y1: Math.max(b.y1, ty + h.y1) },
-        draw: (g, sh) => { v.body.draw(g, sh); g.save(); g.translate(tx, ty); v.head.draw(g, sh); g.restore(); } };
-      raster(v.full);
-    }
+    for (const list of Object.values(SPECIES)) for (const v of list) for (const part of [v.body, v.head, v.full]) if (part) raster(part, 1 / PLANT_K);
+    for (const p of slotPlants) for (const part of [p.v.head, ...p.v.leaves.map(l => l.part)]) raster(part, 1, toGround);   // the bouquet keeps its size relative to the box
   }
 
   // ---------- how votes turn into flowers ----------
@@ -581,8 +694,8 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; }
       const x = p.c.x + d * Math.cos(a), y = p.c.y + d * Math.sin(a) * ISO;
       if (blocked({ x, y })) return null;
       const list = SPECIES[species];
-      const pl = { patch: p, d, a, gx: x, gy: y, sp: species, v: list[Math.floor(r() * list.length)], k: 0.85 + r() * 0.35, flip: r() < 0.5 ? -1 : 1,
-        front: inFront(x, y), born: undefined, delay: r() * 260, phase: r() * TAU, baseH: 0, calm: CALM.has(species), ...extra };
+      const pl = { patch: p, d, a, gx: x, gy: y, sp: species, v: list[Math.floor(r() * list.length)],
+        front: inFront(x, y), born: undefined, delay: r() * 260, phase: r() * TAU, calm: CALM.has(species), ...extra };
       plants.push(pl);
       return pl;
     };
@@ -640,20 +753,27 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; }
   }
 
   // ---------- the bouquet that fills the box first ----------
+  // Each note gets its own long-stemmed flower. The first ones stand up; later ones fan out
+  // along the slot and lean forward or back out of it, like stems in a vase.
   let slotPlants = [];
+  const TALL = { h: [110, 250], R: [18, 28], flex: 0.55 };
+  const ALONG = norm3([1, 1, 0]), OUT = norm3([-1, 1, 0]);   // along the slot / out through the box's long face
   function genSlot() {
     const r = mulberry(4242);
-    const kinds = [['s_daisy', 0.24], ['s_anemone', 0.2], ['s_five', 0.22], ['s_tulip', 0.12], ['s_sun', 0.07], ['s_spike', 0.09], ['s_puff', 0.06]];
+    const kinds = [['daisy', 0.24], ['anemone', 0.2], ['five', 0.22], ['tulip', 0.12], ['sunflower', 0.07], ['spike', 0.09], ['puff', 0.06]];
     slotPlants = [];
     for (let i = 0; i < SLOT_MAX; i++) {
       const t = i === 0 ? 0.5 : 0.08 + ((i * 0.618034 + 0.27) % 1) * 0.84;
       const S0 = lerpPt(SLOT_A, SLOT_B, t);
-      const sp = i === 0 ? 's_daisy' : pickWeighted(r, kinds), list = SPECIES[sp];
-      const spread = Math.min(1, 0.3 + i / 12);
-      slotPlants.push({ at: i + 1, gx: S0.x, gy: S0.y + H_LID, baseH: H_LID, sp, v: list[Math.floor(r() * list.length)], k: 0.85 + r() * 0.3,
-        flip: r() < 0.5 ? -1 : 1, fan: i === 0 ? 0 : ((t - 0.5) * 1.3 + (r() - 0.5) * 0.5) * spread, born: undefined, delay: 0, phase: r() * TAU });
+      const sp = i === 0 ? 'daisy' : pickWeighted(r, kinds);
+      const spread = Math.min(1, 0.45 + i / 10);
+      const along = i === 0 ? 0 : ((t - 0.5) * 1.6 + (r() - 0.5) * 0.5) * spread, out = i === 0 ? 0.2 : (r() * 2 - 1) * spread;
+      const lean = add3(mul3(ALONG, along), mul3(OUT, out));
+      const v = flowerVariant(r, { ...FLOWERS[sp], ...TALL, ...(sp === 'sunflower' && { R: [22, 28] }) }, i, Math.min(0.9, Math.hypot(lean[0], lean[1]) * 0.75), Math.atan2(lean[1], lean[0]));
+      // drawn back to front by where the head ends up
+      slotPlants.push({ at: i + 1, gx: S0.x, gy: S0.y + H_LID, sp, v, born: undefined, delay: 0, phase: r() * TAU, z: S0.y / ISO * COS_E + dot3(v.top, EYE) });
     }
-    slotPlants.sort((a, b) => a.gy - b.gy);
+    slotPlants.sort((a, b) => a.z - b.z);
   }
 
   // ---------- wind ----------
@@ -663,41 +783,98 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; }
     const d = (x + y * 0.4) - front;
     return WIND * (0.05 * base + 0.2 * Math.exp(-(d * d) / (2 * 210 * 210)));
   }
+  // the push on one plant per unit of its height, in world x/y (SWX, SWY): the shared gust, plus
+  // its own sway at its own pace and a little across it, so neighbours don't move as one
+  const WDIR = norm3([1, 0.25, 0]);
+  let SWX = 0, SWY = 0;
+  function sway(p, now) {
+    const f = 0.7 + 0.6 * ((p.phase * 7.3) % 1);
+    const along = windAt(p.gx, p.gy, now) + WIND * 0.035 * Math.sin(now * 0.0021 * f + p.phase), across = WIND * 0.03 * Math.sin(now * 0.0016 * f + p.phase * 2.3);
+    SWX = along * WDIR[0] - across * WDIR[1]; SWY = along * WDIR[1] + across * WDIR[0];
+  }
 
   // ---------- sprite drawing ----------
   const DUR = { grass: 700, clover: 700, reed: 900, fern: 900, bush: 900, bells: 1000, sabra: 1100, tree: 1500 };
   // (m0 m1 m2 m3 m4 m5) · (l0 l1 l2 l3 lx ly) · sprite-pixel → device, without allocating
   function blit(g, part, sh, m0, m1, m2, m3, m4, m5, l0, l1, l2, l3, lx, ly) {
+    const im = sh ? part.sil : part.img;
     const a = m0 * l0 + m2 * l1, b = m1 * l0 + m3 * l1, c = m0 * l2 + m2 * l3, d = m1 * l2 + m3 * l3;
     const e = m0 * lx + m2 * ly + m4, f = m1 * lx + m3 * ly + m5, k = SPR;
-    g.setTransform(a / k, b / k, c / k, d / k, e - a * part.ax - c * part.ay, f - b * part.ax - d * part.ay);
-    g.drawImage(sh ? part.sil : part.img, 0, 0);
+    g.setTransform(a / k, b / k, c / k, d / k, e - a * im.ax - c * im.ay, f - b * im.ax - d * im.ay);
+    g.drawImage(im.c, 0, 0);
   }
-  // draws one plant (body or shadow) into g
+  // draws one garden plant (body or shadow) into g
   function drawPlant(g, p, now, sh, still) {
     const v = p.v, dur = DUR[p.sp] || 1100;
     const t = reduce || still ? 1 : clamp((now - p.born) / dur);
     if (t <= 0) return;
     const gy = elastic(t), gx = 1 + 0.3 * (1 - Math.min(1, gy));
-    const w = (reduce || still || p.calm ? 0 : windAt(p.gx, p.gy, now) + Math.sin(now * 0.002 + p.phase) * 0.012 * WIND) * v.flex + (p.fan || 0);
-    // frame → device, then the ground point, then (shadow) projection, then lift
+    // the push as a sprite can take it: a sideways skew, and looking shorter when pushed toward you
+    let w = 0, c = 0;
+    if (!(reduce || still || p.calm)) { sway(p, now); w = SWX * v.flex * Z; c = SWY * v.flex * SIN_E * Z; }
+    // frame → device, then the ground point, then (shadow) projection
     const K = BASE[0];
     let m0 = K, m1 = 0, m2 = 0, m3 = K, m4 = BASE[4] + K * p.gx, m5 = BASE[5] + K * p.gy;
     if (sh) { m2 = -K * V.x; m3 = -K * V.y; }
-    if (p.baseH) { m4 -= m2 * p.baseH; m5 -= m3 * p.baseH; }
     // local: skew(w) · scale(sx, sy)
-    const pk = p.baseH ? p.k : p.k * PLANT_K;   // the bouquet keeps its size relative to the box
-    const sx = pk * p.flip * gx, sy = pk * gy;
+    const sx = PLANT_K * gx, sy = PLANT_K * gy * (1 - c), pk = PLANT_K;
     if (t >= 1 && v.full) { blit(g, v.full, sh, m0, m1, m2, m3, m4, m5, sx, 0, -w * sy, sy, 0, 0); return; }   // grown: stem + head in one image
     blit(g, v.body, sh, m0, m1, m2, m3, m4, m5, sx, 0, -w * sy, sy, 0, 0);
     if (v.head) {
       const th = reduce ? 1 : clamp((t - 0.38) / 0.62);
       if (th <= 0) return;
       const hs = elastic(th);
-      const tx = sx * v.tip.x - w * sy * v.tip.y, ty = sy * v.tip.y;
+      const tip = sh ? v.stip : v.tip, tx = sx * tip.x - w * sy * tip.y, ty = sy * tip.y;
       const rot = w * 0.8 + (reduce ? 0 : Math.sin(th * 14) * 0.35 * (1 - th));
-      const cr = Math.cos(rot), sr = Math.sin(rot), hx = pk * p.flip * hs, hy = pk * hs;
+      const cr = Math.cos(rot), sr = Math.sin(rot), hx = pk * hs, hy = pk * hs;
       blit(g, v.head, sh, m0, m1, m2, m3, m4, m5, cr * hx, sr * hx, -sr * hy, cr * hy, tx, ty);
+    }
+  }
+
+  // The bouquet bends live in 3D: each stem leaves the slot and its head swings furthest, whichever
+  // way its own wind pushes it. Only the stems are drawn as lines; heads and leaves are sprites
+  // carried along to where the bent stem puts them. mode: 'body', or the shadow on the 'lid'/'ground'.
+  const LP = { gx: 1, gy: 1, hs: 1, wx: 0, wy: 0, H: 1, ox: 0, oy: 0, lift: 0, sh: false }, PT = [0, 0];
+  function livePose(p, now, mode) {
+    const t = reduce ? 1 : clamp((now - p.born) / 1100);
+    if (t <= 0) return false;
+    LP.gy = elastic(t); LP.gx = 1 + 0.3 * (1 - Math.min(1, LP.gy)); LP.hs = reduce ? 1 : elastic(clamp((t - 0.38) / 0.62));
+    LP.wx = LP.wy = 0;
+    if (!reduce) { sway(p, now); LP.wx = SWX * p.v.flex; LP.wy = SWY * p.v.flex; }
+    LP.H = p.v.top[2]; LP.sh = mode !== 'body';
+    LP.ox = p.gx; LP.oy = p.gy - (mode === 'ground' ? 0 : H_LID); LP.lift = mode === 'ground' ? H_LID : 0;
+    return true;
+  }
+  function livePt(q) {   // a point of the growing, bent stem → frame px (into PT)
+    const d = LP.H * (Math.max(0, q[2]) / LP.H) ** 2, x = q[0] * LP.gx + LP.wx * d, y = q[1] * LP.gx + LP.wy * d, z = q[2] * LP.gy;
+    if (LP.sh) { const h = LP.lift + z * COS_E; PT[0] = LP.ox + x + h * V.x; PT[1] = LP.oy + y * SIN_E + h * V.y; }
+    else { PT[0] = LP.ox + x; PT[1] = LP.oy + y * SIN_E - z * COS_E; }
+    return PT;
+  }
+  function stemPath(g, v) { v.stem.forEach((q, i) => { livePt(q); i ? g.lineTo(PT[0], PT[1]) : g.moveTo(PT[0], PT[1]); }); }
+  function stamp(g, part, q, sc) {   // a sprite whose origin rides on stem point q
+    if (sc <= 0) return;
+    const im = LP.sh ? part.sil : part.img, K = BASE[0], k = K * sc / SPR;
+    livePt(q);
+    g.setTransform(k, 0, 0, k, BASE[4] + K * PT[0] - K * sc * im.ax, BASE[5] + K * PT[1] - K * sc * im.ay);
+    g.drawImage(im.c, 0, 0);
+  }
+  function drawLive(g, p, now) {
+    if (!livePose(p, now, 'body')) return;
+    const v = p.v, leaf = front => { for (const l of v.leaves) if (l.front === front) stamp(g, l.part, l.at, LP.gy); };
+    if (v.headFirst) stamp(g, v.head, v.top, LP.hs);
+    leaf(false);
+    setFrame(); g.beginPath(); stemPath(g, v); g.lineWidth = LW; g.strokeStyle = INK; g.lineCap = 'round'; g.lineJoin = 'round'; g.stroke();
+    leaf(true);
+    if (!v.headFirst) stamp(g, v.head, v.top, LP.hs);
+  }
+  function liveShadows(g, now, mode) {   // all of the bouquet's shadow at once: one stroke for the stems
+    setFrame(); g.beginPath();
+    for (const p of slotPlants) if (p.born !== undefined && livePose(p, now, mode)) stemPath(g, p.v);
+    g.lineWidth = LW; g.strokeStyle = INK; g.lineCap = 'round'; g.lineJoin = 'round'; g.stroke();
+    for (const p of slotPlants) if (p.born !== undefined && livePose(p, now, mode)) {
+      if (mode === 'lid') for (const l of p.v.leaves) stamp(g, l.part, l.at, LP.gy);   // on the ground they'd fall inside the box's shadow
+      stamp(g, p.v.head, p.v.top, LP.hs);
     }
   }
   const onScreen = p => p.gx > view.x0 - 420 && p.gx < view.x1 + 120 && p.gy > view.y0 - 60 && p.gy < view.y1 + 260;
@@ -861,7 +1038,7 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; }
 
     ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.drawImage(layers.sh, 0, 0);
     for (const p of live) if (!p.shCached) drawPlant(ctx, p, now, true);
-    for (const p of slotPlants) if (p.born !== undefined) drawPlant(ctx, p, now, true);
+    liveShadows(ctx, now, 'ground');
     for (const pp of papers) drawPaper(pp, now, true);
     for (const sd of seeds) drawSeed(sd, now, true);
 
@@ -876,7 +1053,12 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; }
       ctx.fillStyle = part.fill; ctx.fill(part.p);
       if (part.sw) { ctx.lineWidth = part.sw; ctx.strokeStyle = part.stroke; ctx.lineJoin = 'round'; ctx.stroke(part.p); }
     }
-    for (const p of slotPlants) if (p.born !== undefined) drawPlant(ctx, p, now, false);
+    // the bouquet's shadow first crosses the lid; what passes its edge lands on the ground (drawn above)
+    ctx.save(); ctx.clip(LID_TOP.p);
+    liveShadows(ctx, now, 'lid');
+    ctx.restore();
+    ctx.lineWidth = LID_TOP.sw; ctx.strokeStyle = INK; ctx.lineJoin = 'round'; ctx.stroke(LID_TOP.p);
+    for (const p of slotPlants) if (p.born !== undefined) drawLive(ctx, p, now);
     for (const pp of papers) drawPaper(pp, now, false);
 
     ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.drawImage(layers.front, 0, 0);
@@ -1115,9 +1297,9 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; }
   function boot() {
     booted = true;
     defineSpecies();
+    genSlot();       // before layout(): its heads and leaves are rendered with the rest
     layout();
     genGarden();
-    genSlot();
     showCount();
     syncMode();
     initFonts();
