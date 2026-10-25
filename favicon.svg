@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-61 -385 800 800">
+<!-- The ballot box from the Figma export (node 27:882), strokes thickened to read at 16–32 px, with one flower out of the slot. Cropped so the frame cuts the box. -->
+<defs>
+  <rect id="bg" x="-61" y="-385" width="800" height="800" rx="140"/>
+  <clipPath id="clip"><use href="#bg"/></clipPath>
+</defs>
+<use href="#bg" fill="#1c7de4"/>
+<g clip-path="url(#clip)" stroke="#101010" stroke-width="30" stroke-linejoin="round">
+  <path d="M473.617 499.546L659.134 516.608L1114.74 712.005L864.218 853.113L415.216 655.674L15.6372 424.97L254.968 286.78Z" fill="#101010" stroke-width="0"/>
+  <path d="M14.978 424.97L415.07 655.97V477.77L14.978 246.77V424.97Z" fill="#fff"/>
+  <path d="M655.112 517.37L415.07 655.97V477.77L655.112 339.17V517.37Z" fill="#101010"/>
+  <path d="M1.25 246.77L415.07 485.69V386.69L1.25 147.77V246.77Z" fill="#fff"/>
+  <path d="M668.84 339.17L415.07 485.69V386.69L668.84 240.17V339.17Z" fill="#101010"/>
+  <path d="M255.02 1.25L668.84 240.17L415.07 386.69L1.25 147.77L255.02 1.25Z" fill="#fff"/>
+  <path d="M253.304 142.16L424.772 241.16L416.786 245.78L245.318 146.78Z" fill="#101010" stroke-width="18"/>
+  <path d="M339 193V-150" fill="none" stroke-width="64" stroke-linecap="round"/>
+  <path d="M339 193V-150" fill="none" stroke="#4cb54f" stroke-width="30" stroke-linecap="round"/>
+  <ellipse cx="410" cy="-20" rx="70" ry="30" transform="rotate(-32 410 -20)" fill="#4cb54f" stroke-width="22"/>
+  <g fill="#ff4b3e" stroke-width="22">
+    <circle cx="339" cy="-272" r="64"/>
+    <circle cx="415.1" cy="-216.7" r="64"/>
+    <circle cx="386" cy="-127.3" r="64"/>
+    <circle cx="292" cy="-127.3" r="64"/>
+    <circle cx="262.9" cy="-216.7" r="64"/>
+  </g>
+  <circle cx="339" cy="-192" r="50" fill="#ffcf3a" stroke-width="22"/>
+</g>
+</svg>

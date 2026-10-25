@@ -1,4 +1,4 @@
-# Kalpi Porachat (קלפי פורחת)
+# Ulai Yitzmach Mize Mashehu (אולי יצמח מזה משהו)
 
 Interactive web piece for Israel's 26th Knesset election: a visitor drops a note into an isometric ballot box and it becomes a flower. Static site on GitHub Pages, live shared counter on Firebase Realtime Database. The owner is a graphic designer; talk to him in Hebrew, keep it short.
 
@@ -9,11 +9,13 @@ Interactive web piece for Israel's 26th Knesset election: a visitor drops a note
 - `database.rules.json`: paste into Firebase → Realtime Database → Rules. Public read of `votes/count`; writes only as current + 1.
 - `paper.jpg`: paper texture exported from Figma, screen-blended over everything.
 - `tools/make-preview.py`: one self-contained HTML (texture inlined, no Firebase, review panel on).
+- `og.jpg`, `favicon.svg`, `favicon.ico`, `apple-touch-icon.png`: share image (a close-up of the real scene at 1200×630: box and bouquet at 30 notes, no text, since the owner found the full frame with the headline unreadable as a preview) and icons (the Figma box with a flower out of the slot, cropped so the frame cuts the box). `node tools/make-images.mjs [notes]` regenerates them with headless Edge/Chrome; it serves the page with `fonts/` blocked, so the Tel Aviv files are never loaded.
+- `fonts/tel-aviv/`: the Tel Aviv family by Fontef (Brutalist, Modernist, Eclectic) as delivered. Website License #04813, for this domain only, under 10k monthly visitors. The license forbids changing the files (no conversion, subsetting or base64) and any AI processing of them: never open, parse, convert or render-test these files; only reference them from CSS.
 
 ## Design source
 - Figma file `gRrbKFeDOsnNemajXWTReN`, frame `26:6` (1920×1080). The box paths in `BOX_SVG` are the exact SVG export of node `27:882`. Don't redraw them.
 - Everything is laid out in Figma units and scaled by `--s`. Desktop: `s = min(W/1920, H/1080)`. Portrait: `s = min(W/930, H/1700)`, with the box placed between the headline and the counter (see `layout()`).
-- Fonts come from Adobe Fonts kit `nsr0kgo`: headline in Levit 1950 Black Extended; number in Narkiss Yair Variable "Bold Mono" (`--num-vars: "MONO" 1`; the axis tag is a guess, not verified); label in Narkiss Yair Regular. The review panel reads the kit at runtime and lists every face.
+- Fonts: headline in Tel Aviv Brutalist Bold (`@font-face` rules at the top of the style, files in `fonts/tel-aviv/`). Number and label come from Adobe Fonts kit `nsr0kgo`: number in Narkiss Yair Variable "Regular Mono" (wght 400, `--num-vars: "MONO" 100`; axes verified: wght 200–700, MONO 0–100), label in Narkiss Yair Regular. The kit's Character Set must stay "All Characters" or Hebrew falls back to a system font (Default is Latin only). Levit 1950 is out: its Hagilda license is desktop/print only. The review panel lists the kit faces and the local Tel Aviv faces.
 - Palette: bg `#1c7de4`, ink `#101010`, lawn `#93dd6f`. Strokes 2.5. Shadows are solid ink, projected with `V = (1.662, 0.742)` per unit of height (read off the Figma shadow).
 
 ## How notes become flowers
@@ -30,8 +32,7 @@ Add `?review` to the URL. Preset states, a slider, "the whole process" autoplay,
 GitHub Pages: Settings → Pages → Deploy from a branch → `main` / `(root)`. URL: `https://aki12234-lgtm.github.io/2026_Elections/`.
 
 ## Open items
-- Push to `aki12234-lgtm/2026_Elections` and turn on Pages.
-- Confirm which region the database was created in. The owner said only the USA option worked, but the config URL is the Belgium one; `live.js` falls back either way. Check the browser console for `kalpi: live on …`.
-- Check that the rules are published in Firebase.
+- Check that the rules are published in Firebase. (The database is the Belgium one: the live site logs `kalpi: live on https://kalpi-e4081-default-rtdb.europe-west1.firebasedatabase.app`, and a vote went through on 2026-10-26.)
 - Test on a real phone (only emulated so far) and with the real kit fonts (never rendered in the cloud session).
 - The owner is writing the final copy (headline, counter label).
+- The owner picks the final Tel Aviv face in `?review` (Brutalist Bold is only a default chosen by file name).
