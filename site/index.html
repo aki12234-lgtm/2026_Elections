@@ -29,7 +29,7 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; }
 .frame-ui { position: fixed; inset: 0; pointer-events: none; z-index: 2; }
 .headline {
   position: absolute; margin: 0;
-  top: calc(64px * var(--s)); right: calc(64px * var(--s));
+  top: calc(64px * var(--s) + env(safe-area-inset-top, 0px)); right: calc(64px * var(--s) + env(safe-area-inset-right, 0px));
   width: calc(696.035px * var(--s));
   font-family: var(--display-family), "levit-1950", "Levit 1950", "Levit_1950", "Arial Black", "Arial Hebrew", sans-serif;
   font-weight: var(--display-weight); font-stretch: var(--display-stretch); font-style: var(--display-style);
@@ -40,7 +40,7 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; }
 }
 .counter {
   position: absolute;
-  left: calc(64px * var(--s)); bottom: calc(64px * var(--s));
+  left: calc(64px * var(--s) + env(safe-area-inset-left, 0px)); bottom: calc(64px * var(--s) + env(safe-area-inset-bottom, 0px));
   background: var(--paper); border: calc(2.5px * var(--s)) solid #000;
   padding: calc(16px * var(--s));
   display: flex; flex-direction: column; align-items: center; gap: calc(33px * var(--s));
@@ -83,7 +83,7 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; }
   position: sticky; top: 0; background: #fff;
 }
 .panel header button { font: inherit; font-weight: 400; background: none; border: 0; cursor: pointer; text-decoration: underline; padding: 0; color: inherit; }
-.panel.collapsed { width: auto; }
+.panel.collapsed { width: auto; min-height: 0; }
 .panel.collapsed .body { display: none; }
 .panel.collapsed header { border-bottom: 0; }
 .panel .body { padding: 10px 12px 12px; display: grid; gap: 14px; }
@@ -118,8 +118,15 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; }
   display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; padding: 14px 24px;
 }
 .combos-head strong { font-size: 15px; }
-.combos-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 24px; padding: 24px; }
+.combos-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(360px, 100%), 1fr)); gap: 24px; padding: 24px max(16px, env(safe-area-inset-left, 0px)); }
+@media (max-width: 600px), (max-height: 500px) {
+  .panel { top: auto; left: 8px; right: 8px; bottom: calc(8px + env(safe-area-inset-bottom, 0px)); width: auto; max-height: 58%; min-height: 0; box-shadow: 4px 4px 0 var(--ink); }
+  .panel.collapsed { left: auto; right: 8px; }
+  .combos-head { padding: 12px 16px; }
+}
 .card { display: grid; gap: 8px; cursor: pointer; background: none; border: 0; padding: 0; text-align: right; font: inherit; color: inherit; }
+.card .mini .headline { top: calc(64px * var(--s)); right: calc(64px * var(--s)); }
+.card .mini .counter { left: calc(64px * var(--s)); bottom: calc(64px * var(--s)); }
 .card .mini { position: relative; width: 100%; aspect-ratio: 16 / 9; overflow: hidden; background: var(--blue); border: 2px solid var(--ink); }
 .card .mini img { position: absolute; display: block; max-width: none;
   left: calc(516.83px * var(--s)); top: calc(180.6px * var(--s)); width: calc(1116px * var(--s)); height: calc(854px * var(--s)); }
@@ -132,6 +139,7 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; }
 <body>
 
 <canvas id="scene" aria-hidden="true"></canvas>
+<div id="safe" aria-hidden="true" style="position:fixed;visibility:hidden;pointer-events:none;padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)"></div>
 
 <main class="frame-ui">
   <h1 class="headline">הוסיפו את הפתק שלכם</h1>
@@ -143,7 +151,7 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; }
 
 <aside class="panel" id="panel">
   <header>
-    <span>לוח בדיקה · מחשב</span>
+    <span>לוח בדיקה</span>
     <button type="button" id="collapse">הסתרה (H)</button>
   </header>
   <div class="body">
@@ -257,13 +265,28 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; }
   const cv = document.getElementById('scene'), ctx = cv.getContext('2d');
   const root = document.documentElement, boxBtn = document.getElementById('boxBtn');
   let W = 0, H = 0, DPR = 1, s = 1, ox = 0, oy = 0, BASE = [1, 0, 0, 1, 0, 0], view = { x0: 0, y0: 0, x1: 1920, y1: 1080 };
+  let PORTRAIT = false, PLANT_K = 1;   // phones: plants drawn a bit larger so they still read
   let counterPt = { x: 200, y: 950 };
 
   function layout() {
     W = innerWidth; H = innerHeight;
     DPR = Math.min(2, devicePixelRatio || 1);
-    s = Math.min(W / 1920, H / 1080);
-    ox = (W - 1920 * s) / 2; oy = (H - 1080 * s) / 2;
+    PORTRAIT = W / H < 0.9;
+    if (PORTRAIT) {
+      // phone / portrait: same components at a larger relative size; the box sits between
+      // the headline and the counter, with room above the lid for the bouquet
+      s = Math.min(W / 930, H / 1700);
+      const safe = getComputedStyle(document.getElementById('safe'));
+      const headBottom = 64 + 174 + parseFloat(safe.paddingTop) / s, counterTop = (H - parseFloat(safe.paddingBottom)) / s - 64 - 165;
+      const bouquet = 330, below = 700;                 // above the lid top / lid top to box bottom
+      const lidTop = headBottom + bouquet + Math.max(20, (counterTop - headBottom - bouquet - below) / 2);
+      ox = W * 0.44 - (OFF.x + 335) * s;
+      oy = (lidTop - (OFF.y + 1.25)) * s;
+    } else {
+      s = Math.min(W / 1920, H / 1080);
+      ox = (W - 1920 * s) / 2; oy = (H - 1080 * s) / 2;
+    }
+    PLANT_K = PORTRAIT ? 1.35 : 1;
     cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR);
     sizeLayers();
     BASE = [DPR * s, 0, 0, DPR * s, DPR * ox, DPR * oy];
@@ -469,7 +492,7 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; }
     part.img = mk(false); part.sil = mk(true); part.ax = pad - b.x0; part.ay = pad - b.y0;
   }
   function buildSprites() {
-    SPR = DPR * s * 1.25;
+    SPR = DPR * s * 1.25 * PLANT_K;
     for (const list of Object.values(SPECIES)) for (const v of list) {
       raster(v.body);
       if (!v.head) continue;
@@ -498,8 +521,10 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; }
     const r = mulberry(20261027);
     patches = [];
     const rowH = GRID * 0.866 * ISO;
-    for (let j = 0, y = -420; y < 1500; j++, y += rowH)
-      for (let x = -520 + (j % 2) * GRID / 2; x < 2440; x += GRID)
+    const gx0 = Math.min(-520, view.x0 - 300), gx1 = Math.max(2440, view.x1 + 300);
+    const gy0 = Math.min(-420, view.y0 - 200), gy1 = Math.max(1500, view.y1 + 200);
+    for (let j = 0, y = gy0; y < gy1; j++, y += rowH)
+      for (let x = gx0 + (j % 2) * GRID / 2; x < gx1; x += GRID)
         patches.push({ c: { x: x + (r() - 0.5) * GRID * 0.5, y: y + (r() - 0.5) * rowH * 0.5 }, rmax: 250 + r() * 70, ph1: r() * TAU, ph2: r() * TAU, rv: 0, vel: 0, wake: 0, flowers: [], votes: [] });
 
     // patches whose centre is on screen (and clear of the box) carry the counted flowers
@@ -621,7 +646,8 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; }
     if (sh) { m2 = -K * V.x; m3 = -K * V.y; }
     if (p.baseH) { m4 -= m2 * p.baseH; m5 -= m3 * p.baseH; }
     // local: skew(w) · scale(sx, sy)
-    const sx = p.k * p.flip * gx, sy = p.k * gy;
+    const pk = p.baseH ? p.k : p.k * PLANT_K;   // the bouquet keeps its size relative to the box
+    const sx = pk * p.flip * gx, sy = pk * gy;
     if (t >= 1 && v.full) { blit(g, v.full, sh, m0, m1, m2, m3, m4, m5, sx, 0, -w * sy, sy, 0, 0); return; }   // grown: stem + head in one image
     blit(g, v.body, sh, m0, m1, m2, m3, m4, m5, sx, 0, -w * sy, sy, 0, 0);
     if (v.head) {
@@ -630,7 +656,7 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; }
       const hs = elastic(th);
       const tx = sx * v.tip.x - w * sy * v.tip.y, ty = sy * v.tip.y;
       const rot = w * 0.8 + (reduce ? 0 : Math.sin(th * 14) * 0.35 * (1 - th));
-      const cr = Math.cos(rot), sr = Math.sin(rot), hx = p.k * p.flip * hs, hy = p.k * hs;
+      const cr = Math.cos(rot), sr = Math.sin(rot), hx = pk * p.flip * hs, hy = pk * hs;
       blit(g, v.head, sh, m0, m1, m2, m3, m4, m5, cr * hx, sr * hx, -sr * hy, cr * hy, tx, ty);
     }
   }
@@ -893,8 +919,13 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; }
     step();
   });
 
-  const togglePanel = () => panel.classList.toggle('collapsed');
-  document.getElementById('collapse').addEventListener('click', togglePanel);
+  const collapseBtn = document.getElementById('collapse');
+  const togglePanel = force => {
+    const c = panel.classList.toggle('collapsed', force);
+    collapseBtn.textContent = c ? 'פתיחה' : 'הסתרה (H)';
+  };
+  if (matchMedia('(max-width: 600px), (max-height: 500px)').matches) togglePanel(true);
+  collapseBtn.addEventListener('click', () => togglePanel());
   addEventListener('keydown', e => {
     if (e.target.closest && e.target.closest('select, input')) return;
     if (e.key === 'h' || e.key === 'H' || e.key === 'י') togglePanel();
