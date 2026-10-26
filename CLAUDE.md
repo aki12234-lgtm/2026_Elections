@@ -5,7 +5,7 @@ Interactive web piece for Israel's 26th Knesset election: a visitor drops a note
 ## Files
 - `index.html`: the whole piece (canvas scene, text, review panel). Plain JS, no build step.
 - `config.js`: `goal` (notes until the ground is fully green, 1000) and the Firebase web config (public values).
-- `live.js`: ES module. Finds the database URL (configured one, then the US and Belgium defaults), subscribes to `votes/count`, exposes `window.kalpiVote()` and calls `window.kalpiRemote(count)`.
+- `live.js`: ES module. Probes the configured, US and Belgium database URLs at once (first answer wins, and its REST answer is shown as the count right away), loads the SDK in parallel (also `modulepreload`ed in the head), subscribes to `votes/count`, exposes `window.kalpiVote()` and calls `window.kalpiRemote(count)`; on failure `window.kalpiLocal()`.
 - `database.rules.json`: paste into Firebase → Realtime Database → Rules. Public read of `votes/count`; writes only as current + 1.
 - `paper.jpg`: paper texture exported from Figma, screen-blended over everything.
 - `tools/make-preview.py`: one self-contained HTML (texture inlined, no Firebase, review panel on).
@@ -22,12 +22,14 @@ Interactive web piece for Israel's 26th Knesset election: a visitor drops a note
 - From note 31, each note is one flower in a patch. `genGarden()` pre-assigns every note to a flower (`voteFlower[v]`), and a patch's radius grows just enough to hold its released flowers. At `goal` the ground is fully covered. The number of flowers on screen equals the count.
 - The garden (`nGrow`) chases the real count (`target`) one flower at a time: a seed flies from the box to the flower's spot. Jumps larger than 12 bloom in at once.
 - One note per page load (`voted`); a refresh allows another, as the owner asked.
+- The note (DOM `#note`): follows the mouse with lag and tilt; only a click on the box throws it (anywhere else it shakes). On touch it waits beside the lid's left corner: tap it, tap the box, or drag it in. It flies to the slot, ends skewed 30° like the paper, then the canvas paper drops in with the same message printed on it. Messages (`MESSAGES`): hope/growth/peace words, no party names (avoid e.g. "תקווה חדשה", "יש עתיד").
+- The counter is hidden (`.waiting`) until the first real count; a returning visitor sees the last count from `localStorage` at once. A note cast before Firebase is ready waits for `kalpiVote` (up to 8 s).
 - Performance: plants are pre-rendered sprites. Settled shadows and windless plants (grass, clover, bush, fern, sabra) are painted once into static layers; grown flowers are a single image (stem + head). The lawn has its own layer, repainted only when a patch moves.
 - Wind needs every flower redrawn every frame. `watchSpeed()` turns it off (`STILL`) when the median frame is over 24 ms; then every plant goes into the static layers and the canvas repaints only while something moves (note, seed, ring, growing plant, lawn spring). Measured on a 4×-throttled phone emulation: 4 fps at 300 notes before, 60 fps idle after.
 - Resize regrows the garden only on a width change or a height change over 20% (phone toolbars and keyboards don't).
 
 ## Share
-Bottom-right button, the counter's box mirrored with the box's solid shadow. `navigator.share` (phones), otherwise copies the link (without `?review`) and shows "הקישור הועתק". The arrow nudges after the visitor's note goes in. Open Graph tags are in the head; there's no `og:image` yet (a 1200×630 export from Figma would make WhatsApp previews much better).
+Wide screens: top-left, level with the headline. Portrait: bottom row with the counter (no room beside the headline). The counter's box with the box's solid shadow. `navigator.share` (phones), otherwise copies the link (without `?review`) and shows "הקישור הועתק". The arrow nudges after the visitor's note goes in. Open Graph tags are in the head; there's no `og:image` yet (a 1200×630 export from Figma would make WhatsApp previews much better).
 
 ## Review panel
 Add `?review` to the URL. Preset states, a slider, "the whole process" autoplay, wind, fonts. Everything in it is a local simulation; "חזרה לחי" returns to the live count.

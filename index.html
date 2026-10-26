@@ -11,6 +11,11 @@
 <meta property="og:url" content="https://aki12234-lgtm.github.io/2026_Elections/">
 <meta property="og:locale" content="he_IL">
 <meta name="theme-color" content="#1c7de4">
+<link rel="preconnect" href="https://kalpi-e4081-default-rtdb.europe-west1.firebasedatabase.app" crossorigin>
+<link rel="preconnect" href="https://kalpi-e4081-default-rtdb.firebaseio.com" crossorigin>
+<!-- same version as in live.js -->
+<link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js">
+<link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js">
 <link id="kit" rel="stylesheet" href="https://use.typekit.net/nsr0kgo.css">
 <script src="config.js"></script>
 <style>
@@ -28,7 +33,7 @@
   --label-family: "narkiss-yair-variable"; --label-weight: 400; --label-stretch: normal; --label-style: normal;
   color-scheme: light;
 }
-html, body { margin: 0; height: 100%; overflow: hidden; background: var(--blue); }
+html, body { margin: 0; height: 100%; overflow: hidden; overscroll-behavior: none; background: var(--blue); }
 body { font-family: system-ui, "Segoe UI", Arial, sans-serif; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
 #scene { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
 
@@ -52,8 +57,9 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; -webkit-user-selec
   padding: calc(16px * var(--s));
   display: flex; flex-direction: column; align-items: center; gap: calc(33px * var(--s));
   color: var(--count-color); line-height: .8; white-space: nowrap;
-  transition: color .6s;
+  transition: color .6s, opacity .4s;
 }
+.counter.waiting { opacity: 0; }   /* until the real count arrives */
 .counter b {
   font-family: var(--num-family), "narkiss-yair-variable", "narkiss-yair", "Narkiss Yair Variable", "Arial Hebrew", sans-serif;
   font-weight: var(--num-weight); font-stretch: var(--num-stretch); font-style: var(--num-style);
@@ -68,10 +74,11 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; -webkit-user-selec
   text-box: trim-both cap alphabetic;
 }
 
-/* share: the counter's paper box, mirrored to the bottom-right, with the box's solid shadow (direction V) */
+/* share: the counter's paper box with the box's solid shadow (direction V). Wide: top-left, level with the headline;
+   portrait: no room beside the headline, so it sits in the bottom row with the counter. */
 .share {
   position: absolute; pointer-events: auto; margin: 0;
-  right: calc(64px * var(--s) + env(safe-area-inset-right, 0px)); bottom: calc(64px * var(--s) + env(safe-area-inset-bottom, 0px));
+  left: calc(64px * var(--s) + env(safe-area-inset-left, 0px)); top: calc(64px * var(--s) + env(safe-area-inset-top, 0px));
   display: flex; align-items: center; gap: calc(22px * var(--s));
   padding: calc(22px * var(--s)) calc(26px * var(--s));
   background: var(--paper); color: var(--ink); border: calc(2.5px * var(--s)) solid var(--ink);
@@ -90,7 +97,24 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; -webkit-user-selec
 .share:focus-visible { outline: 3px dashed var(--paper); outline-offset: 6px; }
 .share.nudge svg { animation: nudge .55s ease-in-out 3; }
 @keyframes nudge { 50% { transform: translateX(calc(-12px * var(--s))); } }
+.portrait .share { left: auto; top: auto; right: calc(64px * var(--s) + env(safe-area-inset-right, 0px)); bottom: calc(64px * var(--s) + env(safe-area-inset-bottom, 0px)); }
 @media (pointer: coarse) { .share { min-height: 44px; box-sizing: border-box; } }
+
+/* the note: follows the mouse and goes into the box only with a click on the box.
+   On touch it waits by the box: tap it, tap the box, or drag it in. Sized from JS in layout(). */
+.note {
+  position: fixed; left: 0; top: 0; z-index: 3; pointer-events: none; box-sizing: border-box;
+  display: grid; place-items: center; padding: .3em; text-align: center; direction: rtl;
+  background: var(--paper); color: var(--ink); border: solid var(--ink);
+  font-family: var(--label-family), "narkiss-yair-variable", "narkiss-yair", "Narkiss Yair Variable", "Arial Hebrew", sans-serif;
+  font-weight: 700; line-height: 1.05; overflow-wrap: break-word;
+  will-change: transform; transition: opacity .15s;
+}
+.note span { width: 100%; }
+.note[hidden] { display: none; }
+.note.off { opacity: 0; }
+@media (hover: none) { .note { pointer-events: auto; touch-action: none; } }
+.following, .following #boxBtn { cursor: none; }
 @media (prefers-reduced-motion: reduce) { .share, .share svg { transition: none; animation: none !important; } }
 
 #boxBtn { position: fixed; z-index: 3; background: transparent; border: 0; padding: 0; margin: 0; cursor: pointer; -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
@@ -174,11 +198,12 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; -webkit-user-selec
 
 <main class="frame-ui">
   <h1 class="headline">הוסיפו את הפתק שלכם</h1>
-  <div class="counter" aria-live="polite"><b id="num">0</b><span>פתקים הצטרפו לגינה</span></div>
+  <div class="counter waiting" aria-live="polite"><b id="num">0</b><span>פתקים הצטרפו לגינה</span></div>
   <button class="share" id="share" type="button"><span id="shareLabel" aria-live="polite">שתפו את הקלפי</span><svg viewBox="0 0 64 26" aria-hidden="true"><path d="M62 13H3M14 2 3 13l11 11"/></svg></button>
 </main>
 
 <button id="boxBtn" type="button" aria-label="הכניסו פתק לקלפי"></button>
+<div class="note" id="note" aria-hidden="true"><span id="noteMsg"></span></div>
 <div class="grain"></div>
 
 <aside class="panel" id="panel">
@@ -313,6 +338,7 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; -webkit-user-selec
     sc = s * (PORTRAIT ? SCENE_K.portrait : SCENE_K.wide);
     LINE_K = s / sc;
     root.style.setProperty('--s', s);
+    root.classList.toggle('portrait', PORTRAIT);
     if (PORTRAIT) {
       // phone / portrait: the box is centred on the screen, as long as the bouquet clears the headline
       // and the box clears the bottom row (counter, share). Measured from the page, so the real fonts count.
@@ -338,6 +364,7 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; -webkit-user-selec
     const r = counterEl.getBoundingClientRect();
     counterPt = { x: (r.left + r.width / 2 - ox) / sc, y: (r.top + r.height / 2 - oy) / sc };
     buildSprites();
+    sizeNote();
     dirty = true;
   }
 
@@ -765,10 +792,11 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; -webkit-user-selec
     if (voted && !sim) return;
     if (!sim) {
       voted = true; boxBtn.disabled = true; boxBtn.setAttribute('aria-label', 'הפתק שלך כבר בקלפי');
-      setTimeout(() => shareEl.classList.add('nudge'), PAPER_MS + 500);   // next step: pass it on
+      setTimeout(() => shareEl.classList.add('nudge'), FLY_MS + PAPER_MS + 500);   // next step: pass it on
     }
-    if (reduce) return sendVote();
-    papers.push({ t0: performance.now() });
+    if (reduce) { if (!sim) hideNote(); return sendVote(); }
+    if (throwNote()) return;                      // the note flies to the slot, then drops in as a paper
+    papers.push({ t0: performance.now(), msg: pickMessage(), font: labelFont() });
   }
   function sendVote() {
     if (sim) { setTarget(target + 1); return; }
@@ -797,6 +825,27 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; -webkit-user-selec
     const q = paperQuad(d, sh); if (!q) return;
     setFrame(); ctx.beginPath(); q.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)); ctx.closePath();
     paint(ctx, WHITE, sh, 2.5 * LINE_K);
+    if (sh || !pp.msg) return;
+    // the message, upright in the paper's plane (x along the slot, y down), clipped to what's above the slot
+    const S0 = lerpPt(SLOT_A, SLOT_B, 0.24), S1 = lerpPt(SLOT_A, SLOT_B, 0.76);
+    const L = Math.hypot(S1.x - S0.x, S1.y - S0.y), ux = (S1.x - S0.x) / L, uy = (S1.y - S0.y) / L, k = BASE[0];
+    const cx = (S0.x + S1.x) / 2, cy = (S0.y + S1.y) / 2 - d - PAPER_H / 2;
+    ctx.save(); ctx.clip();
+    ctx.setTransform(k * ux, k * uy, 0, k, BASE[4] + k * cx, BASE[5] + k * cy);
+    ctx.fillStyle = INK; ctx.font = `700 ${NOTE.font}px ${pp.font || 'sans-serif'}`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.direction = 'rtl';
+    const lines = wrapWords(ctx, pp.msg, L * 0.86), lh = NOTE.font * 1.05;
+    lines.forEach((ln, i) => ctx.fillText(ln, 0, (i - (lines.length - 1) / 2) * lh));
+    ctx.restore();
+  }
+  function wrapWords(g, text, maxW) {
+    const lines = [];
+    for (const w of text.split(' ')) {
+      const last = lines[lines.length - 1];
+      if (last !== undefined && g.measureText(last + ' ' + w).width <= maxW) lines[lines.length - 1] = last + ' ' + w;
+      else lines.push(w);
+    }
+    return lines;
   }
   function seedPos(sd, now) {
     const t = clamp((now - sd.t0) / SEED_MS), e = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
@@ -846,6 +895,7 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; -webkit-user-selec
   let countColor = '';
   function frame(now) {
     const ms = now - lastT, dt = Math.min(100, ms) / 1000, steps = Math.ceil(dt * 60); lastT = now;   // springs step at 60Hz even when frames are slow
+    placeNote(now, dt);
 
     for (let i = papers.length - 1; i >= 0; i--) if (now - papers[i].t0 > PAPER_MS) { papers.splice(i, 1); sendVote(); }
     for (let i = seeds.length - 1; i >= 0; i--) if (now - seeds[i].t0 > SEED_MS) {
@@ -949,9 +999,25 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; -webkit-user-selec
   // ---------- live count ----------
   // live.js (Firebase) calls window.kalpiRemote(count) and provides window.kalpiVote().
   // Without it (a local file) the count lives in this page only.
-  let sim = false, liveCount = null;
-  window.kalpiRemote = v => { liveCount = v; if (!sim) setTarget(v); syncMode(); };
-  const COUNTER = { vote: () => window.kalpiVote ? window.kalpiVote() : (setTarget(target + 1), Promise.resolve()) };
+  // The counter stays hidden until the first real number (no flash of 0); a returning visitor
+  // starts from the last count this browser saw. A note cast before Firebase is ready waits for it.
+  const LIVE = !!(CONFIG.firebase && CONFIG.firebase.projectId);
+  let sim = false, liveCount = null, liveFailed = false, known = !LIVE;
+  function markKnown() { if (!known) { known = true; counterEl.classList.remove('waiting'); } }
+  window.kalpiRemote = v => {
+    liveCount = v; if (!sim) setTarget(v); syncMode(); markKnown();
+    try { localStorage.setItem('kalpi-count', String(v)); } catch (e) {}
+  };
+  window.kalpiLocal = () => { liveFailed = true; markKnown(); };
+  const waitLive = () => new Promise(res => {
+    const t0 = performance.now();
+    const tick = () => window.kalpiVote || liveFailed || performance.now() - t0 > 8000 ? res() : setTimeout(tick, 100);
+    tick();
+  });
+  const COUNTER = { vote: async () => {
+    if (LIVE) await waitLive();
+    return window.kalpiVote ? window.kalpiVote() : setTarget(target + 1);
+  } };
 
   // ---------- review panel (only with ?review, or in the preview file) ----------
   const REVIEW = CONFIG.review || /review/.test(location.search + location.hash);
@@ -1171,11 +1237,114 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; -webkit-user-selec
     }, 150);
   });
 
+  // ---------- the note ----------
+  // Follows the mouse (with a little lag and tilt) and goes into the box only with a click on the box;
+  // a click anywhere else shakes it. On touch it waits beside the box: tap it, tap the box, or drag it in.
+  const MESSAGES = ['תקווה', 'שלום', 'צמיחה', 'ביחד', 'פריחה', 'אחדות', 'מחר טוב יותר', 'אמון', 'אור', 'ניצנים', 'שורשים', 'התחלה חדשה'];
+  const pickMessage = () => MESSAGES[Math.floor(Math.random() * MESSAGES.length)];
+  const NOTE = { w: 89.2, h: 150, font: 23 };   // = the paper in the slot, frame units (the slot is 30° off horizontal)
+  const FLY_MS = 420;
+  const noteEl = document.getElementById('note'), noteMsg = document.getElementById('noteMsg');
+  const note = { mode: 'rest', x: -999, y: -999, rot: -8, k: 1, shake: -1e9, fly: null, drag: null, msg: '' };
+  let NOTE_K = 1, noteW = 0, noteH = 0, mouse = null;
+  const labelFont = () => getComputedStyle(root).getPropertyValue('--label-family').trim() + ', "Arial Hebrew", sans-serif';
+  const toScreen = (x, y) => ({ x: ox + x * sc, y: oy + y * sc });
+  const restPt = () => toScreen(OFF.x - 24, OFF.y + 12);                       // beside the lid's left corner
+  const slotPt = () => { const m = lerpPt(SLOT_A, SLOT_B, 0.5); return toScreen(m.x, m.y - 230 - NOTE.h / 2); };   // where the paper starts its drop
+  const overUI = el => !!(el && el.closest && el.closest('.share, .panel, .combos'));
+
+  function sizeNote() {
+    NOTE_K = PORTRAIT ? 1.8 : 1.2;                 // bigger than the paper in the slot, so it reads (and is easy to grab)
+    noteW = NOTE.w * sc * NOTE_K; noteH = NOTE.h * sc * NOTE_K;
+    Object.assign(noteEl.style, { width: noteW + 'px', height: noteH + 'px', fontSize: NOTE.font * sc * NOTE_K + 'px',
+      borderWidth: 2.5 * s + 'px', boxShadow: `${8 * s}px ${3.6 * s}px 0 ${INK}` });
+    if (note.mode === 'rest') { const r = restPt(); note.x = r.x; note.y = r.y; }
+  }
+  function newNote() { note.msg = pickMessage(); noteMsg.textContent = note.msg; note.mode = mouse && !mouse.out ? 'follow' : 'rest'; noteEl.hidden = false; }
+  function hideNote() { note.mode = 'gone'; noteEl.hidden = true; root.classList.remove('following'); }
+  function throwNote() {
+    if (noteEl.hidden || note.mode === 'fly' || note.mode === 'gone') return false;
+    note.fly = { t0: performance.now(), x: note.x, y: note.y, rot: note.rot, k: note.k };
+    note.mode = 'fly'; root.classList.remove('following');
+    return true;
+  }
+  function placeNote(now, dt) {
+    if (note.mode === 'gone') return;
+    let x, y, rot, k = 1, skew = 0;
+    if (note.mode === 'fly') {
+      const f = note.fly, t = clamp((now - f.t0) / FLY_MS), e = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2, to = slotPt();
+      x = f.x + (to.x - f.x) * e; y = f.y + (to.y - f.y) * e - Math.sin(t * Math.PI) * 60 * s;   // a little arc
+      rot = f.rot * (1 - e); k = f.k + (1 / NOTE_K - f.k) * e; skew = 30 * e;                      // ends as the paper over the slot
+      if (t >= 1) {
+        papers.push({ t0: now, msg: note.msg, font: labelFont() });
+        if (sim || !voted) newNote(); else return hideNote();
+        const r = restPt(); note.x = mouse && !mouse.out ? mouse.x : r.x; note.y = mouse && !mouse.out ? mouse.y : r.y;
+      }
+    } else {
+      let tx, ty, trot = -8, tk = 1;
+      if (note.mode === 'drag') { tx = note.drag.x + note.drag.dx; ty = note.drag.y + note.drag.dy; trot = -3; tk = 1.06; }
+      else if (note.mode === 'follow') { tx = mouse.x; ty = mouse.y + noteH * 0.2; trot = mouse.box ? 0 : -6; tk = mouse.box ? 1.08 : 1; }
+      else { const r = restPt(); tx = r.x; ty = r.y + (reduce ? 0 : Math.sin(now / 500) * 5 * s); }
+      const a = reduce || note.mode === 'drag' ? 1 : Math.min(1, dt * 16);
+      if (note.x < -900) { note.x = tx; note.y = ty; }   // first frame: no swoop in from the corner
+      note.x += (tx - note.x) * a; note.y += (ty - note.y) * a;
+      note.rot += (clamp(trot + (tx - note.x) * 0.25, -22, 22) - note.rot) * Math.min(1, dt * 12);   // leans into the motion
+      note.k += (tk - note.k) * Math.min(1, dt * 12);
+      x = note.x; y = note.y; rot = note.rot; k = note.k;
+      const st = (now - note.shake) / 380;                                                            // "only into the box"
+      if (st < 1) { x += Math.sin(st * 26) * noteW * 0.12 * (1 - st); rot += Math.sin(st * 26) * 4 * (1 - st); }
+    }
+    noteEl.style.transform = `translate(${x - noteW / 2}px, ${y - noteH / 2}px) rotate(${rot}deg) skewY(${skew}deg) scale(${k})`;
+  }
+
+  // mouse: the note follows; hidden over buttons and panels, where the normal cursor comes back
+  const canHover = matchMedia('(any-hover: hover)');   // phones send stray mouse events; only real mice drive the note
+  addEventListener('pointermove', e => {
+    if (e.pointerType !== 'mouse' || !canHover.matches) return;
+    mouse = { x: e.clientX, y: e.clientY, box: e.target === boxBtn, ui: overUI(e.target), out: false };
+    if (note.mode === 'rest') note.mode = 'follow';
+    const on = note.mode === 'follow' && !mouse.ui;
+    noteEl.classList.toggle('off', note.mode === 'follow' && mouse.ui);
+    root.classList.toggle('following', on);
+  });
+  root.addEventListener('mouseleave', () => {
+    if (mouse) mouse.out = true;
+    if (note.mode === 'follow') note.mode = 'rest';
+    noteEl.classList.remove('off'); root.classList.remove('following');
+  });
+  addEventListener('click', e => {
+    if ((note.mode === 'follow' || note.mode === 'rest') && e.target !== boxBtn && !overUI(e.target) && !noteEl.contains(e.target)) note.shake = performance.now();
+  });
+  // touch: drag the note into the box, or just tap it
+  noteEl.addEventListener('pointerdown', e => {
+    if (e.pointerType === 'mouse' || note.mode !== 'rest') return;
+    noteEl.setPointerCapture(e.pointerId);
+    note.drag = { id: e.pointerId, x: e.clientX, y: e.clientY, x0: e.clientX, y0: e.clientY, dx: note.x - e.clientX, dy: note.y - e.clientY };
+    note.mode = 'drag';
+  });
+  noteEl.addEventListener('pointermove', e => { if (note.drag && e.pointerId === note.drag.id) { note.drag.x = e.clientX; note.drag.y = e.clientY; } });
+  const endDrag = (e, cancel) => {
+    const d = note.drag; if (!d || e.pointerId !== d.id) return;
+    note.drag = null; note.mode = 'rest';
+    if (cancel) return;
+    const r = boxBtn.getBoundingClientRect(), tap = Math.hypot(d.x - d.x0, d.y - d.y0) < 10;
+    if (tap || (d.x > r.left && d.x < r.right && d.y > r.top && d.y < r.bottom)) castVote();
+  };
+  noteEl.addEventListener('pointerup', e => endDrag(e, false));
+  noteEl.addEventListener('pointercancel', e => endDrag(e, true));
+
   // ---------- boot ----------
   defineSpecies();
+  newNote();
   layout();
   genGarden();
   genSlot();
+  if (LIVE) {
+    let last = null;
+    try { last = JSON.parse(localStorage.getItem('kalpi-count')); } catch (e) {}
+    if (Number.isFinite(last)) { setTarget(last); markKnown(); }
+    setTimeout(markKnown, 8000);   // never hide the counter for good
+  } else counterEl.classList.remove('waiting');
   showCount();
   syncMode();
   initFonts();
