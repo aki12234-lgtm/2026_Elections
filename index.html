@@ -1019,11 +1019,14 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; }
     roleOk[role].textContent = ok ? '✓ נטען' : '✗ לא נטען';
     roleOk[role].className = ok ? '' : 'bad';
   }
-  function choose(role, idx) {
+  // Only a pick made in the panel is remembered; saving the default on every load pinned stale defaults for every visitor.
+  // v2 drops the choices that the old code saved that way.
+  const FONT_KEY = 'kalpi-font-v2-';
+  function choose(role, idx, remember) {
     const fc = faces[idx]; if (!fc) return;
     applyFont(role, fc); roleSel[role].value = idx;
     checkLoaded(role, fc).then(layout);
-    try { localStorage.setItem('kalpi-font-' + role, faceLabel(fc)); } catch (e) {}
+    if (remember) try { localStorage.setItem(FONT_KEY + role, faceLabel(fc)); } catch (e) {}
   }
   function pickDefault(pattern, targetW, preferWide) {
     let best = -1, score = -1e9;
@@ -1049,9 +1052,9 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; }
     }
     note.textContent = `בקיט: ${new Set(faces.map(fc => fc.family)).size} משפחות, ${faces.length} קבצים. ברירת המחדל לפי ה־Figma.`;
     const opts = faces.map((fc, i) => `<option value="${i}">${faceLabel(fc)}</option>`).join('');
-    for (const [role, sel] of Object.entries(roleSel)) { sel.innerHTML = opts; sel.addEventListener('change', () => choose(role, +sel.value)); }
+    for (const [role, sel] of Object.entries(roleSel)) { sel.innerHTML = opts; sel.addEventListener('change', () => choose(role, +sel.value, true)); }
     let saved = {};
-    try { for (const role of Object.keys(roleSel)) saved[role] = localStorage.getItem('kalpi-font-' + role); } catch (e) {}
+    try { for (const role of Object.keys(roleSel)) saved[role] = localStorage.getItem(FONT_KEY + role); } catch (e) {}
     const idxOf = lbl => lbl ? faces.findIndex(fc => faceLabel(fc) === lbl) : -1;
     const def = { display: pickDefault(/tel-aviv-brutalist/i, 700), num: pickDefault(/narkiss.?yair/i, 400), label: pickDefault(/narkiss.?yair/i, 400) };
     for (const role of Object.keys(roleSel)) choose(role, idxOf(saved[role]) >= 0 ? idxOf(saved[role]) : def[role]);
@@ -1077,7 +1080,7 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; }
         <div class="counter"><b>128</b><span>פתקים הצטרפו לגינה</span></div></div>
         <div class="cap"><span>${faceLabel(faces[di])}</span><span>${faceLabel(faces[ni])}</span></div>`;
       applyFont('display', faces[di], card); applyFont('num', faces[ni], card); applyFont('label', faces[li], card);
-      card.addEventListener('click', () => { choose('display', di); choose('num', ni); choose('label', li); closeCombos(); });
+      card.addEventListener('click', () => { choose('display', di, true); choose('num', ni, true); choose('label', li, true); closeCombos(); });
       grid.appendChild(card);
     }
     grid.querySelectorAll('.mini').forEach(m => m.style.setProperty('--s', m.clientWidth / 1920));
