@@ -34,7 +34,7 @@ Interactive web piece for Israel's 26th Knesset election: a visitor drops a note
 - Resize regrows the garden only on a width change or a height change over 20% (phone toolbars and keyboards don't).
 
 ## Share
-Wide screens: top-left, level with the headline. Portrait: bottom row with the counter (no room beside the headline). A small button: "שתפו" + arrow, the counter's 2.5 stroke on paper, no shadow (the owner found the big shadowed one too heavy); inverts on hover; ~13px minimum text with a larger invisible tap area on touch. `navigator.share` (phones), otherwise copies the link (without `?review`) and shows "הקישור הועתק". The arrow nudges after the visitor's note goes in.
+Wide screens: top-left, level with the headline. Portrait: bottom row with the counter (no room beside the headline). A small button: "שתפו" + a 45° arrow (↖, square ends, the border's stroke; the owner wanted it generic, not rounded), the counter's 2.5 stroke on paper, no shadow (the owner found the big shadowed one too heavy); inverts on hover; ~13px minimum text with a larger invisible tap area on touch. `navigator.share` (phones), otherwise copies the link (without `?review`) and shows "הקישור הועתק". The arrow nudges (diagonally) after the visitor's note goes in.
 
 ## Review panel
 Add `?review` to the URL. Preset states, a slider, "the whole process" autoplay, wind, fonts. Everything in it is a local simulation; "חזרה לחי" returns to the live count.
