@@ -2,6 +2,7 @@
 // These values are public by design; the database rules decide what visitors can write.
 window.KALPI_CONFIG = {
   goal: 1000,        // notes until the whole ground is green
+  offset: 50,        // shown on top of the real count (counter and garden), so the piece opens partway
   firebase: {
     apiKey: "AIzaSyB77uuzdLOu26RWqnMudnGP4bNaA-BBV-U",
     authDomain: "kalpi-e4081.firebaseapp.com",

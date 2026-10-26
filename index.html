@@ -245,6 +245,7 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; }
   const ISO = 0.5774, TAU = Math.PI * 2;
   const CONFIG = window.KALPI_CONFIG || {};
   const GOAL = Math.max(100, CONFIG.goal || 1000);   // notes until the whole ground is green
+  const OFFSET = Math.max(0, Math.round(CONFIG.offset || 0));   // added to the live count before it is shown
   const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
   let WIND = 1;
 
@@ -902,7 +903,8 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; }
   // live.js (Firebase) calls window.kalpiRemote(count) and provides window.kalpiVote().
   // Without it (a local file) the count lives in this page only.
   let sim = false, liveCount = null;
-  window.kalpiRemote = v => { liveCount = v; if (!sim) setTarget(v); syncMode(); };
+  // target is in shown units (live + OFFSET); liveCount stays the real number in the database
+  window.kalpiRemote = v => { liveCount = v; if (!sim) setTarget(v + OFFSET); syncMode(); };
   const COUNTER = { vote: () => window.kalpiVote ? window.kalpiVote() : (setTarget(target + 1), Promise.resolve()) };
 
   // ---------- review panel (only with ?review, or in the preview file) ----------
@@ -928,11 +930,11 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; }
   }
   function syncMode() {
     const live = typeof window.kalpiVote === 'function';
-    modeEl.textContent = sim ? 'סימולציה (רק אצלך)' : live ? `חי · ${liveCount ?? '…'} פתקים בשרת` : 'מקומי (בלי שרת)';
+    modeEl.textContent = sim ? 'סימולציה (רק אצלך)' : live ? `חי · ${liveCount ?? '…'} פתקים בשרת${OFFSET ? ` (+${OFFSET} בתצוגה)` : ''}` : 'מקומי (בלי שרת)';
     backLive.hidden = !(sim && live);
     boxBtn.disabled = voted && !sim;
   }
-  backLive.addEventListener('click', () => { stopAuto(); sim = false; setTarget(liveCount || 0); syncMode(); });
+  backLive.addEventListener('click', () => { stopAuto(); sim = false; setTarget((liveCount || 0) + OFFSET); syncMode(); });
   document.getElementById('addOne').addEventListener('click', () => { if (!sim) sim = true; syncMode(); castVote(); });
   boxBtn.addEventListener('click', castVote);
   const windRange = document.getElementById('windRange'), windOut = document.getElementById('windOut');

@@ -4,7 +4,7 @@ Interactive web piece for Israel's 26th Knesset election: a visitor drops a note
 
 ## Files
 - `index.html`: the whole piece (canvas scene, text, review panel). Plain JS, no build step.
-- `config.js`: `goal` (notes until the ground is fully green, 1000) and the Firebase web config (public values).
+- `config.js`: `goal` (notes until the ground is fully green, 1000), `offset` (50: added to the live count before it is shown, counter and garden alike, so the piece opens partway; the owner chose real + 50 over an honest counter) and the Firebase web config (public values).
 - `live.js`: ES module. Finds the database URL (configured one, then the US and Belgium defaults), subscribes to `votes/count`, exposes `window.kalpiVote()` and calls `window.kalpiRemote(count)`.
 - `database.rules.json`: paste into Firebase → Realtime Database → Rules. Public read of `votes/count`; writes only as current + 1.
 - `paper.jpg`: paper texture exported from Figma, screen-blended over everything.
@@ -20,7 +20,7 @@ Interactive web piece for Israel's 26th Knesset election: a visitor drops a note
 
 ## How notes become flowers
 - Notes 1–30 (`SLOT_MAX`) grow a bouquet out of the slot. Small grass patches sprout at notes 4, 9, 15, 21, 27.
-- From note 31, each note is one flower in a patch. `genGarden()` pre-assigns every note to a flower (`voteFlower[v]`), and a patch's radius grows just enough to hold its released flowers. At `goal` the ground is fully covered. The number of flowers on screen equals the count.
+- From note 31, each note is one flower in a patch. `genGarden()` pre-assigns every note to a flower (`voteFlower[v]`), and a patch's radius grows just enough to hold its released flowers. At `goal` the ground is fully covered. The number of flowers on screen equals the shown count (live + `offset`). The review panel's mode line shows the real server count and the offset.
 - The garden (`nGrow`) chases the real count (`target`) one flower at a time: a seed flies from the box to the flower's spot. Jumps larger than 12 bloom in at once.
 - One note per page load (`voted`); a refresh allows another, as the owner asked.
 - Performance: plants are pre-rendered sprites. Settled shadows and windless plants (grass, clover, bush, fern, sabra) are painted once into static layers; grown flowers are a single image (stem + head).
