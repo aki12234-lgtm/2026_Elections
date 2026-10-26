@@ -19,7 +19,7 @@
 ## פרסום ב־GitHub Pages
 **Settings → Pages → Build and deployment → Source: Deploy from a branch → Branch: `main`, תיקייה `/ (root)` → Save**.
 
-כל עדכון ל־`main` עולה לאוויר תוך דקה־שתיים. הכתובת: `https://aki12234-lgtm.github.io/2026_Elections/`.
+כל עדכון ל־`main` עולה לאוויר תוך דקה־שתיים. הכתובת: `https://yitzmach.site/` (הדומיין ב־Cloudflare, מוגדר בקובץ `CNAME`; הכתובת הישנה ב־github.io מפנה אליו).
 
 ## Firebase
 - הפרויקט: `kalpi-e4081`. ההגדרות כבר ב־`config.js`.

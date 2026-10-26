@@ -40,7 +40,7 @@ Wide screens: top-left, level with the headline. Portrait: bottom row with the c
 Add `?review` to the URL. Preset states, a slider, "the whole process" autoplay, wind, fonts. Everything in it is a local simulation; "חזרה לחי" returns to the live count.
 
 ## Deploy
-GitHub Pages: Settings → Pages → Deploy from a branch → `main` / `(root)`. URL: `https://aki12234-lgtm.github.io/2026_Elections/`.
+GitHub Pages: Settings → Pages → Deploy from a branch → `main` / `(root)`. URL: `https://yitzmach.site/` (domain registered at Cloudflare, DNS only: four A records to GitHub Pages and `www` CNAME to `aki12234-lgtm.github.io`; set by the `CNAME` file, which must stay in the root. The old github.io URL redirects to it). The Fontef license is per domain: it must name `yitzmach.site`.
 
 ## Open items
 - Check that the rules are published in Firebase. (The database is the Belgium one: the live site logs `kalpi: live on https://kalpi-e4081-default-rtdb.europe-west1.firebasedatabase.app`, and a vote went through on 2026-10-26.)
