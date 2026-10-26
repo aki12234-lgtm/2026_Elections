@@ -14,7 +14,7 @@ html = (root / "index.html").read_text(encoding="utf-8")
 paper = base64.b64encode((root / "paper.jpg").read_bytes()).decode()
 
 html = html.replace('<script src="config.js"></script>',
-                    "<script>window.KALPI_CONFIG = { goal: 60, sprout: 6, review: true };</script>")
+                    "<script>window.KALPI_CONFIG = { goal: 60, sprout: 6, full: 300, review: true };</script>")
 html = html.replace("url(paper.jpg)", f"url(data:image/jpeg;base64,{paper})")
 html = html.replace('<script type="module" src="live.js"></script>\n', "")
 

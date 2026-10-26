@@ -1,8 +1,9 @@
 // Site settings. `firebase` comes from the Firebase console (Project settings → Your apps → Web app).
 // These values are public by design; the database rules decide what visitors can write.
 window.KALPI_CONFIG = {
-  goal: 60,          // notes until the whole ground is green
+  goal: 60,          // notes until the whole ground is green (a fifth of the flowers are out by then)
   sprout: 6,         // the note from which islands start to sprout around the box
+  full: 300,         // notes until every flower is out; past it, each note makes a grown flower bloom again
   offset: 0,         // shown on top of the real count (counter and garden); 0 = the honest count
   firebase: {
     apiKey: "AIzaSyB77uuzdLOu26RWqnMudnGP4bNaA-BBV-U",

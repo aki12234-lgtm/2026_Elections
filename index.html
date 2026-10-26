@@ -746,9 +746,13 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; -webkit-user-selec
   // around the box and every note also releases a handful of flowers into them (FIELD flowers spread
   // over the notes up to GOAL); a patch grows just enough to hold the flowers it has.
   // The whole ground is green at GOAL.
-  const SLOT_MAX = 30, SPROUT = Math.max(2, CONFIG.sprout || 6), FIELD = 900;
+  // The lawn and the flowers keep different clocks: the ground is all green at GOAL (60), but only a fifth
+  // of the flowers are out by then; the rest come one handful per note until FULL (300), so a note after 60
+  // still visibly adds something. Past FULL, each note's seed lands on a grown flower and it blooms again.
+  const SLOT_MAX = 30, SPROUT = Math.max(2, CONFIG.sprout || 6), FIELD = 1800, FULL = Math.max(GOAL + 10, CONFIG.full || 300);
+  const FIELD_AT_GOAL = Math.round(FIELD / 5);   // ~360 at GOAL, then ~6 a note
   const GRID = 300, RMIN = 55;
-  let patches = [], plants = [], voteFlower = [];
+  let patches = [], plants = [], voteFlower = [], released = [];
   const pwob = (p, a) => 1 + 0.06 * Math.sin(5 * a + p.ph1) + 0.035 * Math.sin(9 * a + p.ph2);
 
   const FLOWER_MIX = [['daisy', 0.2], ['anemone', 0.17], ['five', 0.25], ['tulip', 0.12], ['sunflower', 0.06], ['puff', 0.09], ['spike', 0.11]];
@@ -811,30 +815,31 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; -webkit-user-selec
     }
     plants.sort((a, b) => a.gy - b.gy);
 
-    // schedule: which flowers each note releases. A few islands open at SPROUT, the rest spread
-    // over the notes up to `allOpen`; each note's flowers go to open islands by the room they have left.
+    // schedule: which flowers each note releases. A few islands open at SPROUT, the rest spread over the notes
+    // up to `allOpen`, and every open island's lawn grows to full by GOAL (patchTarget). A note's flowers are
+    // picked at random from the open islands, among those already inside the lawn as it is at that note.
     voteFlower = [];
     const open = [], allOpen = Math.round(SPROUT + (GOAL - SPROUT) * 0.88);
-    let next = 0;
+    let next = 0, debt = 0;
     const openOne = v => { const p = counted[next++]; p.T = v; open.push(p); };
-    const room = () => open.reduce((s2, p) => s2 + (p.flowers.length - p.votes.length), 0);
-    const share = v => Math.round(FIELD * (v - SPROUT + 1) / (GOAL - SPROUT + 1));
-    for (let v = SPROUT; v <= GOAL; v++) {
-      const want = v === SPROUT ? 4 : Math.ceil((counted.length - next) / Math.max(1, allOpen - v + 1));
+    const cum = v => v < SPROUT ? 0 : v <= GOAL ? Math.round(FIELD_AT_GOAL * (v - SPROUT + 1) / (GOAL - SPROUT + 1))
+      : Math.round(FIELD_AT_GOAL + (FIELD - FIELD_AT_GOAL) * (v - GOAL) / (FULL - GOAL));
+    for (let v = SPROUT; v <= FULL; v++) {
+      const want = v === SPROUT ? 4 : v > allOpen ? counted.length : Math.ceil((counted.length - next) / Math.max(1, allOpen - v + 1));
       for (let k = 0; k < want && next < counted.length; k++) openOne(v);
+      const pool = [];
+      for (const p of open) { const lim = patchTarget(p, v) * 0.9 - 14; for (const fl of p.flowers) if (fl.vote === Infinity && fl.d < lim) pool.push(fl); }
       const batch = [];
-      for (let n = share(v) - (v > SPROUT ? share(v - 1) : 0); n > 0; n--) {
-        let left = room();
-        if (left === 0 && next < counted.length) { openOne(v); left = room(); }
-        if (left === 0) break;
-        let pick = r() * left, chosen = null;
-        for (const p of open) { pick -= p.flowers.length - p.votes.length; if (pick < 0) { chosen = p; break; } }
-        if (!chosen) chosen = open.find(p => p.flowers.length > p.votes.length);
-        const fl = chosen.flowers[chosen.votes.length];
-        fl.vote = v; fl.seq = batch.length; chosen.votes.push(v); batch.push(fl);
+      let n = v === FULL ? pool.length : cum(v) - cum(v - 1) + debt;
+      for (; n > 0 && pool.length; n--) {
+        const i = Math.floor(r() * pool.length), fl = pool[i];
+        pool[i] = pool[pool.length - 1]; pool.pop();
+        fl.vote = v; fl.seq = batch.length; batch.push(fl);
       }
+      debt = n;                      // flowers the lawn had no room for yet carry over to the next notes
       voteFlower[v] = batch;
     }
+    released = plants.filter(pl => pl.flower && pl.vote > 0 && pl.vote <= FULL);
     // patches off screen or under the box fill in over the last part
     deco.forEach((p, k) => { p.T = Math.round(GOAL * 0.75 + (k / Math.max(1, deco.length)) * GOAL * 0.17); p.deco = true; });
     lawnDirty = true;
@@ -842,11 +847,9 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; -webkit-user-selec
 
   function patchTarget(p, v) {
     if (p.T === undefined || v < p.T) return 0;
-    if (p.deco || !p.flowers.length) return RMIN + (p.rmax - RMIN) * easeOut(clamp((v - p.T) / Math.max(1, GOAL - p.T)));
-    let m = 0; while (m < p.votes.length && p.votes[m] <= v) m++;
-    if (m === 0) return RMIN;
-    if (m === p.flowers.length) return p.rmax + 10;
-    return Math.max(RMIN, p.flowers[m - 1].d + 42);
+    // every island grows from a sprout to its full size by GOAL, whatever its flowers are doing
+    const full = p.deco ? p.rmax : p.rmax + 10;
+    return RMIN + (full - RMIN) * easeOut(clamp((v - p.T) / Math.max(1, GOAL - p.T)));
   }
 
   // ---------- the bouquet that fills the box first ----------
@@ -1014,7 +1017,7 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; -webkit-user-selec
   let target = 0, nGrow = 0, inflight = 0, lastLaunch = 0, lastT = performance.now();
   let pending = null;            // own note sent, waiting for the server
   let voted = false;             // one note per page load
-  const papers = [], seeds = [], rings = [];
+  const papers = [], seeds = [], rings = [], blooms = [];
   const numEl = document.getElementById('num');
   const shown = () => pending ? Math.max(target, pending.base + 1) : target;
   function showCount() { const v = shown(); numEl.textContent = v.toLocaleString('en-US'); syncPanel(v); }
@@ -1049,9 +1052,16 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; -webkit-user-selec
     COUNTER.vote().catch(() => { pending = null; showCount(); });
   }
   function growOne(now) {
-    const v = nGrow + inflight + 1, batch = voteFlower[v];
+    const v = nGrow + inflight + 1, from = lerpPt(SLOT_A, SLOT_B, 0.5);
+    if (v > FULL && released.length && !reduce) {   // the garden is full: the seed lands on a grown flower and it blooms again
+      const fl = released[Math.floor(Math.random() * released.length)];
+      seeds.push({ t0: now, from: { x: from.x, y: from.y + H_LID }, to: { x: fl.gx, y: fl.gy }, patch: fl.patch, rebloom: fl });
+      inflight++;
+      return;
+    }
+    const batch = voteFlower[v];
     if (!batch || !batch.length || reduce) { nGrow++; return; }
-    const fl = batch[0], from = lerpPt(SLOT_A, SLOT_B, 0.5);   // one seed per note; its flowers pop up around where it lands
+    const fl = batch[0];   // one seed per note; its flowers pop up around where it lands
     seeds.push({ t0: now, from: { x: from.x, y: from.y + H_LID }, to: { x: fl.gx, y: fl.gy }, patch: fl.patch });
     inflight++;
   }
@@ -1145,6 +1155,7 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; -webkit-user-selec
     for (let i = seeds.length - 1; i >= 0; i--) if (now - seeds[i].t0 > SEED_MS) {
       const sd = seeds.splice(i, 1)[0]; nGrow++; inflight--;
       sd.patch.vel += 220; rings.push({ t0: now, at: sd.to });
+      if (sd.rebloom) blooms.push({ pl: sd.rebloom, t0: now });   // blooms again: a pulse drawn over its settled copy
     }
     // the garden chases the count
     const gap = target - nGrow - inflight;
@@ -1195,7 +1206,7 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; -webkit-user-selec
 
     // paint only when something moves, plus one frame after, so whatever just stopped is painted at rest
     const springing = active.some(p => Math.abs(p.rv - p.target) > 0.3 || Math.abs(p.vel) > 0.3);
-    const busy = !STILL || live.length > 0 || papers.length > 0 || seeds.length > 0 || rings.length > 0 || springing || slotGrowing;
+    const busy = !STILL || live.length > 0 || papers.length > 0 || seeds.length > 0 || rings.length > 0 || blooms.length > 0 || springing || slotGrowing;
     if (!busy && !dirty) { requestAnimationFrame(frame); return; }
     if (!STILL) watchSpeed(ms);
     dirty = busy;
@@ -1231,6 +1242,14 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; -webkit-user-selec
 
     ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.drawImage(layers.front, 0, 0);
     for (const p of live) if (p.front) drawPlant(ctx, p, now, false);
+
+    // past FULL: the flower a seed landed on swells and settles back, over its cached copy
+    for (let i = blooms.length - 1; i >= 0; i--) {
+      const b = blooms[i], t = (now - b.t0) / 700;
+      if (t >= 1) { blooms.splice(i, 1); continue; }
+      const part = b.pl.v.full || b.pl.v.body, k = PLANT_K * (1 + 0.35 * Math.sin(Math.PI * t) * (1 - t * 0.4)), K = BASE[0];
+      blit(ctx, part, false, K, 0, 0, K, BASE[4] + K * b.pl.gx, BASE[5] + K * b.pl.gy, k, 0, 0, k, 0, 0);
+    }
 
     // landing rings
     for (let i = rings.length - 1; i >= 0; i--) {
@@ -1273,7 +1292,7 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; -webkit-user-selec
   const REVIEW = CONFIG.review || /review/.test(location.search + location.hash);
   const panel = document.getElementById('panel');
   if (!REVIEW) panel.hidden = true;
-  const STATES = [['ריק', 0], ['פתק ראשון', 1], ['5', 5], ['איים · 6', 6], ['10', 10], ['20', 20], ['קלפי מלאה · 30', 30], ['45', 45], ['מלא · 60', 60]];
+  const STATES = [['ריק', 0], ['פתק ראשון', 1], ['איים · 6', 6], ['20', 20], ['קלפי מלאה · 30', 30], ['45', 45], ['ירוק · 60', 60], ['150', 150], ['מלא · 300', 300]];
   const statesEl = document.getElementById('states');
   const modeEl = document.getElementById('mode'), backLive = document.getElementById('backLive');
   function simTo(v) { sim = true; setTarget(v); syncMode(); }
@@ -1284,10 +1303,10 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; -webkit-user-selec
     statesEl.appendChild(b);
   });
   const nRange = document.getElementById('nRange'), nOut = document.getElementById('nOut');
-  nRange.max = GOAL;
+  nRange.max = FULL;
   nRange.addEventListener('input', () => { stopAuto(); simTo(+nRange.value); });
   function syncPanel(v) {
-    nRange.value = Math.min(v, GOAL); nOut.textContent = v.toLocaleString('en-US');
+    nRange.value = Math.min(v, FULL); nOut.textContent = v.toLocaleString('en-US');
     statesEl.querySelectorAll('.chip').forEach(b => b.setAttribute('aria-pressed', String(+b.dataset.v === v)));
   }
   function syncMode() {
@@ -1312,10 +1331,10 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; -webkit-user-selec
     let k = 0;
     playBtn.textContent = '■ עצירה';
     const step = () => {
-      if (target >= GOAL) return stopAuto();
+      if (target >= FULL) return stopAuto();
       const interval = Math.max(40, 1400 * Math.pow(0.91, k));
       if (interval > 320) papers.push({ t0: performance.now() });
-      else setTarget(Math.min(GOAL, target + 1 + Math.max(0, Math.floor((k - 40) / 9))));
+      else setTarget(Math.min(FULL, target + 1 + Math.max(0, Math.floor((k - 40) / 9))));
       k++;
       auto = setTimeout(step, interval);
     };
