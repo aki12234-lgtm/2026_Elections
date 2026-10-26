@@ -297,8 +297,11 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; }
   let W = 0, H = 0, DPR = 1, s = 1, ox = 0, oy = 0, BASE = [1, 0, 0, 1, 0, 0], view = { x0: 0, y0: 0, x1: 1920, y1: 1080 };
   let PORTRAIT = false, PLANT_K = 1;   // phones: plants drawn a bit larger so they still read
   let counterPt = { x: 200, y: 950 };
+  // a window with no size (hidden, or an in-app browser still opening) has no ground to plant in; keep the last layout
+  const hasSize = () => innerWidth > 0 && innerHeight > 0;
 
   function layout() {
+    if (!hasSize()) return;
     W = innerWidth; H = innerHeight;
     DPR = Math.min(2, devicePixelRatio || 1);
     PORTRAIT = W / H < 0.9;
@@ -1089,21 +1092,30 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; }
   document.getElementById('openCombos').addEventListener('click', () => { combos.hidden = false; buildCombos(); });
   document.getElementById('closeCombos').addEventListener('click', closeCombos);
 
-  let resizeTimer = 0;
+  let resizeTimer = 0, booted = false;
   addEventListener('resize', () => {
     clearTimeout(resizeTimer);
-    resizeTimer = setTimeout(() => { layout(); genGarden(); bloomTo(nGrow, performance.now()); }, 150);
+    resizeTimer = setTimeout(() => {
+      if (!hasSize()) return;
+      if (!booted) return boot();
+      layout(); genGarden(); bloomTo(nGrow, performance.now());
+    }, 150);
   });
 
   // ---------- boot ----------
-  defineSpecies();
-  layout();
-  genGarden();
-  genSlot();
-  showCount();
-  syncMode();
-  initFonts();
-  requestAnimationFrame(frame);
+  // waits for the first real window size (see hasSize)
+  function boot() {
+    booted = true;
+    defineSpecies();
+    layout();
+    genGarden();
+    genSlot();
+    showCount();
+    syncMode();
+    initFonts();
+    requestAnimationFrame(frame);
+  }
+  if (hasSize()) boot();
 })();
 </script>
 <script type="module" src="live.js"></script>
