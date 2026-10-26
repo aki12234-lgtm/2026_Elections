@@ -20,6 +20,10 @@
 <meta property="og:image:height" content="630">
 <meta property="og:image:alt" content="קלפי לבנה על רקע כחול, וזר פרחים צומח מהחריץ שלה">
 <meta name="twitter:card" content="summary_large_image">
+<link rel="preconnect" href="https://kalpi-e4081-default-rtdb.europe-west1.firebasedatabase.app" crossorigin>
+<!-- same version as in live.js: starts downloading before live.js runs -->
+<link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js">
+<link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js">
 <link id="kit" rel="stylesheet" href="https://use.typekit.net/nsr0kgo.css">
 <script src="config.js"></script>
 <style>
@@ -51,8 +55,8 @@
   --label-family: "narkiss-yair-variable"; --label-weight: 400; --label-stretch: normal; --label-style: normal;
   color-scheme: light;
 }
-html, body { margin: 0; height: 100%; overflow: hidden; background: var(--blue); }
-body { font-family: system-ui, "Segoe UI", Arial, sans-serif; }
+html, body { margin: 0; height: 100%; overflow: hidden; overscroll-behavior: none; background: var(--blue); }
+body { font-family: system-ui, "Segoe UI", Arial, sans-serif; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
 #scene { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
 
 /* ---------- composition text (positions from Figma) ---------- */
@@ -79,8 +83,9 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; }
   padding: calc(16px * var(--s));
   display: flex; flex-direction: column; align-items: center; gap: calc(33px * var(--s));
   color: var(--count-color); line-height: .8; white-space: nowrap;
-  transition: color .6s;
+  transition: color .6s, opacity .4s;
 }
+.counter.waiting { opacity: 0; }   /* until the real count arrives: never a flash of 0 */
 .counter b {
   font-family: var(--num-family), "narkiss-yair-variable", "narkiss-yair", "Narkiss Yair Variable", "Arial Hebrew", sans-serif;
   font-weight: var(--num-weight); font-stretch: var(--num-stretch); font-style: var(--num-style);
@@ -95,7 +100,51 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; }
   text-box: trim-both cap alphabetic;
 }
 
-#boxBtn { position: fixed; z-index: 3; background: transparent; border: 0; padding: 0; margin: 0; cursor: pointer; }
+/* share: the counter's paper box with the box's solid shadow (direction V). Wide: top-left, level with the headline;
+   portrait: no room beside the headline, so it sits in the bottom row with the counter. */
+.share {
+  position: absolute; pointer-events: auto; margin: 0;
+  left: calc(64px * var(--s) + env(safe-area-inset-left, 0px)); top: calc(64px * var(--s) + env(safe-area-inset-top, 0px));
+  display: flex; align-items: center; gap: calc(22px * var(--s));
+  padding: calc(22px * var(--s)) calc(26px * var(--s));
+  background: var(--paper); color: var(--ink); border: calc(2.5px * var(--s)) solid var(--ink);
+  box-shadow: calc(13.3px * var(--s)) calc(5.9px * var(--s)) 0 var(--ink);
+  font-family: var(--label-family), "narkiss-yair-variable", "narkiss-yair", "Narkiss Yair Variable", "Arial Hebrew", sans-serif;
+  font-weight: 700; font-size: calc(40px * var(--s)); line-height: .8; white-space: nowrap; direction: rtl;
+  cursor: pointer; -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+  transition: transform .12s, box-shadow .12s;
+}
+.share span { text-box: trim-both cap alphabetic; }
+.share svg { width: calc(64px * var(--s)); height: calc(26px * var(--s)); flex: none; overflow: visible;
+  fill: none; stroke: var(--ink); stroke-width: 3.5; stroke-linecap: round; stroke-linejoin: round; }
+@media (hover: hover) { .share:hover { transform: translate(calc(-2px * var(--s)), calc(-1px * var(--s))); box-shadow: calc(15.3px * var(--s)) calc(6.9px * var(--s)) 0 var(--ink); } }
+.share:active { transform: translate(calc(13.3px * var(--s)), calc(5.9px * var(--s))); box-shadow: 0 0 0 var(--ink); }
+.share:focus-visible { outline: 3px dashed var(--paper); outline-offset: 6px; }
+.share.nudge svg { animation: nudge .55s ease-in-out 3; }
+@keyframes nudge { 50% { transform: translateX(calc(-12px * var(--s))); } }
+.portrait .share { left: auto; top: auto; right: calc(64px * var(--s) + env(safe-area-inset-right, 0px)); bottom: calc(64px * var(--s) + env(safe-area-inset-bottom, 0px)); }
+@media (pointer: coarse) { .share { min-height: 44px; box-sizing: border-box; } }
+@media (prefers-reduced-motion: reduce) { .share, .share svg { transition: none; animation: none !important; } }
+
+/* the note is the paper itself: the size and the slot's 30° shear it has going into the box, from the start.
+   It follows the mouse and goes in only with a click on the box; on touch it waits by the box (tap it, tap the box, or drag it in).
+   Sized from JS in layout(). */
+.note-paper {
+  position: fixed; left: 0; top: 0; z-index: 3; pointer-events: none; box-sizing: border-box;
+  display: grid; place-items: center; padding: .3em; text-align: center; direction: rtl;
+  background: var(--paper); color: var(--ink); border: solid var(--ink);
+  font-family: var(--label-family), "narkiss-yair-variable", "narkiss-yair", "Narkiss Yair Variable", "Arial Hebrew", sans-serif;
+  font-weight: 700; line-height: 1.05; overflow-wrap: break-word;
+  will-change: transform; transition: opacity .15s;
+}
+.note-paper span { width: 100%; }
+.note-paper::before { content: ""; position: absolute; inset: -14px; }   /* easier to grab on touch */
+.note-paper[hidden] { display: none; }
+.note-paper.off { opacity: 0; }
+@media (hover: none) { .note-paper { pointer-events: auto; touch-action: none; } }
+.following, .following #boxBtn { cursor: none; }
+
+#boxBtn { position: fixed; z-index: 3; background: transparent; border: 0; padding: 0; margin: 0; cursor: pointer; -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
 #boxBtn:focus-visible { outline: 3px dashed var(--paper); outline-offset: 6px; }
 
 /* Figma: Texturelabs paper, screen blend, over everything */
@@ -173,14 +222,15 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; }
 <body>
 
 <canvas id="scene" aria-hidden="true"></canvas>
-<div id="safe" aria-hidden="true" style="position:fixed;visibility:hidden;pointer-events:none;padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)"></div>
 
 <main class="frame-ui">
   <h1 class="headline">הוסיפו את<br>הפתק שלכם</h1>
-  <div class="counter" aria-live="polite"><b id="num">0</b><span>פתקים הצטרפו לגינה</span></div>
+  <div class="counter waiting" aria-live="polite"><b id="num">0</b><span>פתקים הצטרפו לגינה</span></div>
+  <button class="share" id="share" type="button"><span id="shareLabel" aria-live="polite">שתפו את הקלפי</span><svg viewBox="0 0 64 26" aria-hidden="true"><path d="M62 13H3M14 2 3 13l11 11"/></svg></button>
 </main>
 
 <button id="boxBtn" type="button" aria-label="הכניסו פתק לקלפי"></button>
+<div class="note-paper" id="note" aria-hidden="true"><span id="noteMsg"></span></div>
 <div class="grain"></div>
 
 <aside class="panel" id="panel">
@@ -244,7 +294,7 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; }
   const RED = '#ff4b3e', YEL = '#ffcf3a', PINK = '#ff9ac1', ORANGE = '#ff8a2b', TAN = '#f1d27a';
   const ISO = 0.5774, TAU = Math.PI * 2;
   const CONFIG = window.KALPI_CONFIG || {};
-  const GOAL = Math.max(100, CONFIG.goal || 1000);   // notes until the whole ground is green
+  const GOAL = Math.max(20, CONFIG.goal || 60);      // notes until the whole ground is green
   const OFFSET = Math.max(0, Math.round(CONFIG.offset || 0));   // added to the live count before it is shown
   const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
   let WIND = 1;
@@ -299,8 +349,13 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; }
   // ---------- canvas / layout ----------
   const cv = document.getElementById('scene'), ctx = cv.getContext('2d');
   const root = document.documentElement, boxBtn = document.getElementById('boxBtn');
-  let W = 0, H = 0, DPR = 1, s = 1, ox = 0, oy = 0, BASE = [1, 0, 0, 1, 0, 0], view = { x0: 0, y0: 0, x1: 1920, y1: 1080 };
+  const headEl = document.querySelector('.headline'), counterEl = document.querySelector('.counter'), shareEl = document.getElementById('share');
+  // s scales the text (Figma units); sc = s · SCENE_K scales the box and the garden, which read too big at the frame's size
+  const SCENE_K = 0.72;
+  const HULL_C = { x: OFF.x + 335, y: OFF.y + 328 };   // middle of the box outline: the scene shrinks around it
+  let W = 0, H = 0, DPR = 1, s = 1, sc = 1, ox = 0, oy = 0, BASE = [1, 0, 0, 1, 0, 0], view = { x0: 0, y0: 0, x1: 1920, y1: 1080 };
   let PORTRAIT = false, PLANT_K = 1;   // phones: plants drawn a bit larger so they still read
+  let LINE_K = 1;                      // scene px per screen-2.5 stroke: every outline stays the Figma 2.5 at any scene scale
   let counterPt = { x: 200, y: 950 };
   // a window with no size (hidden, or an in-app browser still opening) has no ground to plant in; keep the last layout
   const hasSize = () => innerWidth > 0 && innerHeight > 0;
@@ -310,33 +365,37 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; }
     W = innerWidth; H = innerHeight;
     DPR = Math.min(2, devicePixelRatio || 1);
     PORTRAIT = W / H < 0.9;
+    s = PORTRAIT ? Math.min(W / 930, H / 1700) : Math.min(W / 1920, H / 1080);
+    sc = s * SCENE_K; LINE_K = s / sc;
+    root.style.setProperty('--s', s);                   // so the text below is measured at this scale
+    root.classList.toggle('portrait', PORTRAIT);
     if (PORTRAIT) {
-      // phone / portrait: same components at a larger relative size; the box sits between
-      // the headline and the counter, with room above the lid for the bouquet
-      s = Math.min(W / 930, H / 1700);
-      root.style.setProperty('--s', s);                 // so the headline below is measured at this scale
-      const safe = getComputedStyle(document.getElementById('safe'));
-      const headH = document.querySelector('.headline').getBoundingClientRect().height / s;
-      const headBottom = 64 + headH + parseFloat(safe.paddingTop) / s, counterTop = (H - parseFloat(safe.paddingBottom)) / s - 64 - 165;
-      const bouquet = 330, below = 700;                 // above the lid top / lid top to box bottom
-      const lidTop = headBottom + bouquet + Math.max(20, (counterTop - headBottom - bouquet - below) / 2);
-      ox = W * 0.44 - (OFF.x + 335) * s;
-      oy = (lidTop - (OFF.y + 1.25)) * s;
+      // phone / portrait: the box is centred on the screen, as long as the bouquet clears the headline
+      // and the box clears the bottom row (counter, share). Measured from the page, so the real fonts count.
+      const top = headEl.getBoundingClientRect().bottom;
+      const bottom = Math.min(counterEl.getBoundingClientRect().top, shareEl.getBoundingClientRect().top);
+      const bouquet = 330 * sc, below = 700 * sc;       // above the lid top / lid top to box bottom
+      const centred = H / 2 - (HULL_C.y - OFF.y - 1.25) * sc;
+      const lidTop = Math.max(top + bouquet + 8, Math.min(bottom - below, centred));
+      ox = W / 2 - HULL_C.x * sc;
+      oy = lidTop - (OFF.y + 1.25) * sc;
     } else {
-      s = Math.min(W / 1920, H / 1080);
-      ox = (W - 1920 * s) / 2; oy = (H - 1080 * s) / 2;
+      // the frame is centred; the box keeps its middle where Figma has it
+      ox = (W - 1920 * s) / 2 + HULL_C.x * (s - sc);
+      oy = (H - 1080 * s) / 2 + HULL_C.y * (s - sc);
     }
-    PLANT_K = PORTRAIT ? 1.35 : 1;
+    PLANT_K = PORTRAIT ? 1.15 : 1;
     cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR);
     sizeLayers();
-    BASE = [DPR * s, 0, 0, DPR * s, DPR * ox, DPR * oy];
-    view = { x0: -ox / s, y0: -oy / s, x1: (W - ox) / s, y1: (H - oy) / s };
-    root.style.setProperty('--s', s);
-    const xs = HULL.map(p => ox + p.x * s), ys = HULL.map(p => oy + p.y * s);
+    BASE = [DPR * sc, 0, 0, DPR * sc, DPR * ox, DPR * oy];
+    view = { x0: -ox / sc, y0: -oy / sc, x1: (W - ox) / sc, y1: (H - oy) / sc };
+    const xs = HULL.map(p => ox + p.x * sc), ys = HULL.map(p => oy + p.y * sc);
     Object.assign(boxBtn.style, { left: Math.min(...xs) + 'px', top: Math.min(...ys) + 'px', width: (Math.max(...xs) - Math.min(...xs)) + 'px', height: (Math.max(...ys) - Math.min(...ys)) + 'px' });
-    const r = document.querySelector('.counter').getBoundingClientRect();
-    counterPt = { x: (r.left + r.width / 2 - ox) / s, y: (r.top + r.height / 2 - oy) / s };
+    const r = counterEl.getBoundingClientRect();
+    counterPt = { x: (r.left + r.width / 2 - ox) / sc, y: (r.top + r.height / 2 - oy) / sc };
     buildSprites();
+    sizeNote();
+    dirty = true;
   }
 
   // ---------- vector drawing ----------
@@ -652,16 +711,17 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; }
     part.img = mk(false); part.sil = mk(true);
   }
   function buildSprites() {
-    SPR = DPR * s * 1.25 * PLANT_K;
-    for (const list of Object.values(SPECIES)) for (const v of list) for (const part of [v.body, v.head, v.full]) if (part) raster(part, 1 / PLANT_K);
-    for (const p of slotPlants) for (const part of [p.v.head, ...p.v.leaves.map(l => l.part)]) raster(part, 1, toGround);   // the bouquet keeps its size relative to the box
+    SPR = DPR * sc * 1.25 * PLANT_K;
+    for (const list of Object.values(SPECIES)) for (const v of list) for (const part of [v.body, v.head, v.full]) if (part) raster(part, LINE_K / PLANT_K);
+    for (const p of slotPlants) for (const part of [p.v.head, ...p.v.leaves.map(l => l.part)]) raster(part, LINE_K, toGround);   // the bouquet keeps its size relative to the box
   }
 
   // ---------- how votes turn into flowers ----------
-  // One note = one flower. Notes 1–30 fill the box; small grass patches sprout meanwhile.
-  // From note 31 on, every note is a flower in a patch on the ground, and a patch grows
-  // just enough to hold the flowers it has. The whole ground is green only at GOAL.
-  const SLOT_MAX = 30, SPROUT_AT = [4, 9, 15, 21, 27];
+  // Notes 1–30 grow the bouquet out of the slot, one flower each. From note SPROUT on, islands sprout
+  // around the box and every note also releases a handful of flowers into them (FIELD flowers spread
+  // over the notes up to GOAL); a patch grows just enough to hold the flowers it has.
+  // The whole ground is green at GOAL.
+  const SLOT_MAX = 30, SPROUT = Math.max(2, CONFIG.sprout || 6), FIELD = 900;
   const GRID = 300, RMIN = 55;
   let patches = [], plants = [], voteFlower = [];
   const pwob = (p, a) => 1 + 0.06 * Math.sin(5 * a + p.ph1) + 0.035 * Math.sin(9 * a + p.ph2);
@@ -669,6 +729,7 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; }
   const FLOWER_MIX = [['daisy', 0.2], ['anemone', 0.17], ['five', 0.25], ['tulip', 0.12], ['sunflower', 0.06], ['puff', 0.09], ['spike', 0.11]];
   function pickWeighted(r, mix) { let v = r(), acc = 0; for (const [k, w] of mix) { acc += w; if (v < acc) return k; } return mix[mix.length - 1][0]; }
   const blocked = pt => inPoly(pt, FOOT) || inPoly(pt, SHADOW_POLY);
+  const hidden = pt => inPoly(pt, HULL) && !inFront(pt.x, pt.y);   // behind the box: fine for grass, not for a counted flower
 
   function genGarden() {
     const r = mulberry(20261027);
@@ -682,7 +743,7 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; }
 
     // patches whose centre is on screen (and clear of the box) carry the counted flowers
     const onScreen = p => p.c.x > view.x0 + 20 && p.c.x < view.x1 - 20 && p.c.y > view.y0 + 10 && p.c.y < view.y1 - 10;
-    const counted = patches.filter(p => onScreen(p) && !blocked(p.c));
+    const counted = patches.filter(p => onScreen(p) && !blocked(p.c) && !hidden(p.c));
     const deco = patches.filter(p => !counted.includes(p));
     counted.forEach(p => p.key = r()); counted.sort((a, b) => a.key - b.key);
     const anchor = { x: CENTER.x - 380, y: CENTER.y + 190 };
@@ -692,7 +753,7 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; }
     plants = [];
     const add = (p, species, d, a, extra = {}) => {
       const x = p.c.x + d * Math.cos(a), y = p.c.y + d * Math.sin(a) * ISO;
-      if (blocked({ x, y })) return null;
+      if (blocked({ x, y }) || (extra.vote === Infinity && hidden({ x, y }))) return null;
       const list = SPECIES[species];
       const pl = { patch: p, d, a, gx: x, gy: y, sp: species, v: list[Math.floor(r() * list.length)],
         front: inFront(x, y), born: undefined, delay: r() * 260, phase: r() * TAU, calm: CALM.has(species), ...extra };
@@ -701,8 +762,8 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; }
     };
     const spot = (p, maxFrac = 0.98) => ({ d: Math.sqrt(r()) * p.rmax * maxFrac, a: r() * TAU });
 
-    // flower capacity per counted patch, by area, adding up to every note after the box
-    const FIELD = GOAL - SLOT_MAX, area = counted.reduce((s2, p) => s2 + p.rmax * p.rmax, 0);
+    // flower capacity per counted patch, by area, adding up to FIELD
+    const area = counted.reduce((s2, p) => s2 + p.rmax * p.rmax, 0);
     let left = FIELD;
     counted.forEach((p, i) => { p.cap = i === counted.length - 1 ? left : Math.max(1, Math.round(FIELD * p.rmax * p.rmax / area)); left -= p.cap; });
 
@@ -725,27 +786,38 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; }
     }
     plants.sort((a, b) => a.gy - b.gy);
 
-    // schedule: which note becomes which flower
+    // schedule: which flowers each note releases. A few islands open at SPROUT, the rest spread
+    // over the notes up to `allOpen`; each note's flowers go to open islands by the room they have left.
     voteFlower = [];
-    const open = [];
+    const open = [], allOpen = Math.round(SPROUT + (GOAL - SPROUT) * 0.88);
     let next = 0;
-    SPROUT_AT.forEach(v => { if (next < counted.length) { const p = counted[next++]; p.T = v; open.push(p); } });
-    for (let v = SLOT_MAX + 1; v <= GOAL; v++) {
-      const room = open.reduce((s2, p) => s2 + (p.flowers.length - p.votes.length), 0);
-      if (next < counted.length && (room === 0 || r() < 0.075)) { const p = counted[next++]; p.T = v; open.push(p); }
-      let pick = r() * open.reduce((s2, p) => s2 + (p.flowers.length - p.votes.length), 0), chosen = null;
-      for (const p of open) { pick -= p.flowers.length - p.votes.length; if (pick < 0) { chosen = p; break; } }
-      if (!chosen) continue;
-      const fl = chosen.flowers[chosen.votes.length];
-      fl.vote = v; chosen.votes.push(v); voteFlower[v] = fl;
+    const openOne = v => { const p = counted[next++]; p.T = v; open.push(p); };
+    const room = () => open.reduce((s2, p) => s2 + (p.flowers.length - p.votes.length), 0);
+    const share = v => Math.round(FIELD * (v - SPROUT + 1) / (GOAL - SPROUT + 1));
+    for (let v = SPROUT; v <= GOAL; v++) {
+      const want = v === SPROUT ? 4 : Math.ceil((counted.length - next) / Math.max(1, allOpen - v + 1));
+      for (let k = 0; k < want && next < counted.length; k++) openOne(v);
+      const batch = [];
+      for (let n = share(v) - (v > SPROUT ? share(v - 1) : 0); n > 0; n--) {
+        let left = room();
+        if (left === 0 && next < counted.length) { openOne(v); left = room(); }
+        if (left === 0) break;
+        let pick = r() * left, chosen = null;
+        for (const p of open) { pick -= p.flowers.length - p.votes.length; if (pick < 0) { chosen = p; break; } }
+        if (!chosen) chosen = open.find(p => p.flowers.length > p.votes.length);
+        const fl = chosen.flowers[chosen.votes.length];
+        fl.vote = v; fl.seq = batch.length; chosen.votes.push(v); batch.push(fl);
+      }
+      voteFlower[v] = batch;
     }
     // patches off screen or under the box fill in over the last part
-    deco.forEach((p, k) => { p.T = Math.round(GOAL * 0.72 + (k / Math.max(1, deco.length)) * GOAL * 0.2); p.deco = true; });
+    deco.forEach((p, k) => { p.T = Math.round(GOAL * 0.75 + (k / Math.max(1, deco.length)) * GOAL * 0.17); p.deco = true; });
+    lawnDirty = true;
   }
 
   function patchTarget(p, v) {
     if (p.T === undefined || v < p.T) return 0;
-    if (p.deco) return RMIN + (p.rmax - RMIN) * easeOut(clamp((v - p.T) / (GOAL - p.T)));
+    if (p.deco || !p.flowers.length) return RMIN + (p.rmax - RMIN) * easeOut(clamp((v - p.T) / Math.max(1, GOAL - p.T)));
     let m = 0; while (m < p.votes.length && p.votes[m] <= v) m++;
     if (m === 0) return RMIN;
     if (m === p.flowers.length) return p.rmax + 10;
@@ -811,7 +883,7 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; }
     const gy = elastic(t), gx = 1 + 0.3 * (1 - Math.min(1, gy));
     // the push as a sprite can take it: a sideways skew, and looking shorter when pushed toward you
     let w = 0, c = 0;
-    if (!(reduce || still || p.calm)) { sway(p, now); w = SWX * v.flex * Z; c = SWY * v.flex * SIN_E * Z; }
+    if (!(reduce || still || STILL || p.calm)) { sway(p, now); w = SWX * v.flex * Z; c = SWY * v.flex * SIN_E * Z; }
     // frame → device, then the ground point, then (shadow) projection
     const K = BASE[0];
     let m0 = K, m1 = 0, m2 = 0, m3 = K, m4 = BASE[4] + K * p.gx, m5 = BASE[5] + K * p.gy;
@@ -840,7 +912,7 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; }
     if (t <= 0) return false;
     LP.gy = elastic(t); LP.gx = 1 + 0.3 * (1 - Math.min(1, LP.gy)); LP.hs = reduce ? 1 : elastic(clamp((t - 0.38) / 0.62));
     LP.wx = LP.wy = 0;
-    if (!reduce) { sway(p, now); LP.wx = SWX * p.v.flex; LP.wy = SWY * p.v.flex; }
+    if (!reduce && !STILL) { sway(p, now); LP.wx = SWX * p.v.flex; LP.wy = SWY * p.v.flex; }
     LP.H = p.v.top[2]; LP.sh = mode !== 'body';
     LP.ox = p.gx; LP.oy = p.gy - (mode === 'ground' ? 0 : H_LID); LP.lift = mode === 'ground' ? H_LID : 0;
     return true;
@@ -864,14 +936,14 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; }
     const v = p.v, leaf = front => { for (const l of v.leaves) if (l.front === front) stamp(g, l.part, l.at, LP.gy); };
     if (v.headFirst) stamp(g, v.head, v.top, LP.hs);
     leaf(false);
-    setFrame(); g.beginPath(); stemPath(g, v); g.lineWidth = LW; g.strokeStyle = INK; g.lineCap = 'round'; g.lineJoin = 'round'; g.stroke();
+    setFrame(); g.beginPath(); stemPath(g, v); g.lineWidth = LW * LINE_K; g.strokeStyle = INK; g.lineCap = 'round'; g.lineJoin = 'round'; g.stroke();
     leaf(true);
     if (!v.headFirst) stamp(g, v.head, v.top, LP.hs);
   }
   function liveShadows(g, now, mode) {   // all of the bouquet's shadow at once: one stroke for the stems
     setFrame(); g.beginPath();
     for (const p of slotPlants) if (p.born !== undefined && livePose(p, now, mode)) stemPath(g, p.v);
-    g.lineWidth = LW; g.strokeStyle = INK; g.lineCap = 'round'; g.lineJoin = 'round'; g.stroke();
+    g.lineWidth = LW * LINE_K; g.strokeStyle = INK; g.lineCap = 'round'; g.lineJoin = 'round'; g.stroke();
     for (const p of slotPlants) if (p.born !== undefined && livePose(p, now, mode)) {
       if (mode === 'lid') for (const l of p.v.leaves) stamp(g, l.part, l.at, LP.gy);   // on the ground they'd fall inside the box's shadow
       stamp(g, p.v.head, p.v.top, LP.hs);
@@ -882,19 +954,33 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; }
   // Once a plant has finished growing, its shadow (and, for plants the wind doesn't move,
   // its body) is painted once into static layers. Removing anything repaints them.
   const CALM = new Set(['grass', 'clover', 'bush', 'sabra', 'fern']);
-  const layers = { sh: document.createElement('canvas'), back: document.createElement('canvas'), front: document.createElement('canvas') };
+  const layers = { lawn: document.createElement('canvas'), sh: document.createElement('canvas'), back: document.createElement('canvas'), front: document.createElement('canvas') };
   const lg = {};
   let layersDirty = true;
   function sizeLayers() { for (const [k, c] of Object.entries(layers)) { c.width = cv.width; c.height = cv.height; lg[k] = c.getContext('2d'); } layersDirty = true; }
   function clearLayers() {
     for (const [k, c] of Object.entries(layers)) { lg[k].setTransform(1, 0, 0, 1, 0, 0); lg[k].clearRect(0, 0, c.width, c.height); }
     for (const p of plants) p.shCached = p.cached = false;
-    layersDirty = false;
+    layersDirty = false; lawnDirty = dirty = true;
   }
   function settle(p, now) {
     drawPlant(lg.sh, p, now, true, true);
     p.shCached = true;
-    if (p.calm) { drawPlant(p.front ? lg.front : lg.back, p, now, false, true); p.cached = true; }
+    if (p.calm || STILL) { drawPlant(p.front ? lg.front : lg.back, p, now, false, true); p.cached = true; }
+  }
+
+  // Wind means redrawing every flower every frame. If the device can't hold ~40fps with it,
+  // the wind stops: every plant goes into the static layers and an idle frame paints nothing.
+  let STILL = reduce, dirty = true;
+  const frameMs = [];
+  let frameSum = 0;
+  function watchSpeed(ms) {   // judged on the median of ~1.5s (or 60 frames) of windy frames
+    if (STILL || document.hidden || ms > 1500) return;
+    frameMs.push(ms); frameSum += ms;
+    if (frameMs.length < 60 && frameSum < 1500) return;
+    const median = frameMs.sort((a, b) => a - b)[frameMs.length >> 1];
+    frameMs.length = 0; frameSum = 0;
+    if (median > 24) { STILL = true; layersDirty = true; }
   }
 
   // ---------- state ----------
@@ -919,12 +1005,16 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; }
   }
 
   // ---------- vote: note → slot → (box full? seed → flower in a patch) ----------
-  const PAPER_H = 150, PAPER_MS = 720, SEED_MS = 760;
+  const PAPER_H = 200, PAPER_T = [0.1, 0.9], PAPER_MS = 720, SEED_MS = 760;   // PAPER_T: the paper's span along the slot
   function castVote() {
     if (voted && !sim) return;
-    if (!sim) { voted = true; boxBtn.disabled = true; boxBtn.setAttribute('aria-label', 'הפתק שלך כבר בקלפי'); }
-    if (reduce) return sendVote();
-    papers.push({ t0: performance.now() });
+    if (!sim) {
+      voted = true; boxBtn.disabled = true; boxBtn.setAttribute('aria-label', 'הפתק שלך כבר בקלפי');
+      setTimeout(() => shareEl.classList.add('nudge'), FLY_MS + PAPER_MS + 500);   // next step: pass it on
+    }
+    if (reduce) { if (!sim) hideNote(); return sendVote(); }
+    if (throwNote()) return;                      // the note flies to the slot, then drops in as the paper
+    papers.push({ t0: performance.now(), msg: pickMessage(), font: labelFont() });
   }
   function sendVote() {
     if (sim) { setTarget(target + 1); return; }
@@ -933,17 +1023,16 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; }
     COUNTER.vote().catch(() => { pending = null; showCount(); });
   }
   function growOne(now) {
-    const v = nGrow + inflight + 1;
-    const fl = voteFlower[v];
-    if (v <= SLOT_MAX || !fl || reduce) { nGrow++; return; }
-    const from = lerpPt(SLOT_A, SLOT_B, 0.5);
+    const v = nGrow + inflight + 1, batch = voteFlower[v];
+    if (!batch || !batch.length || reduce) { nGrow++; return; }
+    const fl = batch[0], from = lerpPt(SLOT_A, SLOT_B, 0.5);   // one seed per note; its flowers pop up around where it lands
     seeds.push({ t0: now, from: { x: from.x, y: from.y + H_LID }, to: { x: fl.gx, y: fl.gy }, patch: fl.patch });
     inflight++;
   }
   function paperQuad(d, sh) {
     const hb = Math.max(d, 0), ht = d + PAPER_H;
     if (ht <= 0) return null;
-    const S0 = lerpPt(SLOT_A, SLOT_B, 0.24), S1 = lerpPt(SLOT_A, SLOT_B, 0.76);
+    const S0 = lerpPt(SLOT_A, SLOT_B, PAPER_T[0]), S1 = lerpPt(SLOT_A, SLOT_B, PAPER_T[1]);
     const pt = (Sp, h) => sh ? { x: Sp.x + (H_LID + h) * V.x, y: Sp.y + H_LID + (H_LID + h) * V.y } : { x: Sp.x, y: Sp.y - h };
     return [pt(S0, hb), pt(S1, hb), pt(S1, ht), pt(S0, ht)];
   }
@@ -952,7 +1041,27 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; }
     const t = clamp((now - pp.t0) / PAPER_MS), d = 230 - (230 + PAPER_H) * t * t;
     const q = paperQuad(d, sh); if (!q) return;
     setFrame(); ctx.beginPath(); q.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)); ctx.closePath();
-    paint(ctx, WHITE, sh, 2.5);
+    paint(ctx, WHITE, sh, 2.5 * LINE_K);
+    if (sh || !pp.msg) return;
+    // the message, in the paper's plane (sheared along the slot like the note), clipped to what's above the slot
+    const S0 = lerpPt(SLOT_A, SLOT_B, PAPER_T[0]), S1 = lerpPt(SLOT_A, SLOT_B, PAPER_T[1]), k = BASE[0];
+    const cx = (S0.x + S1.x) / 2, cy = (S0.y + S1.y) / 2 - d - PAPER_H / 2;
+    ctx.save(); ctx.clip();
+    ctx.setTransform(k, k * (S1.y - S0.y) / (S1.x - S0.x), 0, k, BASE[4] + k * cx, BASE[5] + k * cy);
+    ctx.fillStyle = INK; ctx.font = `700 ${NOTE.font}px ${pp.font || 'sans-serif'}`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.direction = 'rtl';
+    const lines = wrapWords(ctx, pp.msg, NOTE.w * 0.86), lh = NOTE.font * 1.05;
+    lines.forEach((ln, i) => ctx.fillText(ln, 0, (i - (lines.length - 1) / 2) * lh));
+    ctx.restore();
+  }
+  function wrapWords(g, text, maxW) {
+    const lines = [];
+    for (const w of text.split(' ')) {
+      const last = lines[lines.length - 1];
+      if (last !== undefined && g.measureText(last + ' ' + w).width <= maxW) lines[lines.length - 1] = last + ' ' + w;
+      else lines.push(w);
+    }
+    return lines;
   }
   function seedPos(sd, now) {
     const t = clamp((now - sd.t0) / SEED_MS), e = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
@@ -966,30 +1075,43 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; }
     ctx.beginPath();
     if (sh) ctx.ellipse(g.x + h * V.x, g.y + h * V.y, 9, 9 * ISO, 0, 0, TAU);
     else ctx.ellipse(g.x, g.y - h, 9, 11, 0, 0, TAU);
-    paint(ctx, WHITE, sh, 2.5);
+    paint(ctx, WHITE, sh, 2.5 * LINE_K);
   }
 
   // ---------- lawn ----------
-  function lawnPath(p, dy) {
+  function lawnPath(g, p, dy) {
     const R = p.rv;
     for (let i = 0; i <= 64; i++) {
       const a = i / 64 * TAU, rr = R * pwob(p, a);
       const x = p.c.x + rr * Math.cos(a), y = p.c.y + rr * Math.sin(a) * ISO + dy;
-      i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+      i ? g.lineTo(x, y) : g.moveTo(x, y);
     }
-    ctx.closePath();
+    g.closePath();
   }
+  // the lawn has its own layer, repainted only when a patch's radius moved
+  let lawnDirty = true;
+  const lawnOnScreen = p => p.c.x + p.rv * 1.12 > view.x0 && p.c.x - p.rv * 1.12 < view.x1 && p.c.y + p.rv * 0.66 + 18 > view.y0 && p.c.y - p.rv * 0.66 < view.y1;
   function drawLawn(active) {
-    if (!active.length) return;
-    setFrame();
-    ctx.beginPath(); active.forEach(p => lawnPath(p, 13)); ctx.fillStyle = INK; ctx.fill();           // turf edge
-    ctx.beginPath(); active.forEach(p => lawnPath(p, 0)); ctx.lineWidth = 5; ctx.strokeStyle = INK; ctx.lineJoin = 'round'; ctx.stroke();
-    ctx.fillStyle = LAWN; ctx.fill();                                                                    // one outline around the union
+    if (lawnDirty) {
+      const g = lg.lawn, vis = active.filter(lawnOnScreen);
+      g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, layers.lawn.width, layers.lawn.height);
+      if (vis.length) {
+        g.setTransform(BASE[0], BASE[1], BASE[2], BASE[3], BASE[4], BASE[5]);
+        g.beginPath(); vis.forEach(p => lawnPath(g, p, 13)); g.fillStyle = INK; g.fill();           // turf edge
+        g.beginPath(); vis.forEach(p => lawnPath(g, p, 0)); g.lineWidth = 5; g.strokeStyle = INK; g.lineJoin = 'round'; g.stroke();
+        g.fillStyle = LAWN; g.fill();                                                                // one outline around the union
+      }
+      for (const p of patches) p.drawnRv = p.rv;
+      lawnDirty = false;
+    }
+    ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.drawImage(layers.lawn, 0, 0);
   }
 
   // ---------- frame ----------
+  let countColor = '';
   function frame(now) {
-    const dt = Math.min(50, now - lastT) / 1000; lastT = now;
+    const ms = now - lastT, dt = Math.min(100, ms) / 1000, steps = Math.ceil(dt * 60); lastT = now;   // springs step at 60Hz even when frames are slow
+    placeNote(now, dt);
 
     for (let i = papers.length - 1; i >= 0; i--) if (now - papers[i].t0 > PAPER_MS) { papers.splice(i, 1); sendVote(); }
     for (let i = seeds.length - 1; i >= 0; i--) if (now - seeds[i].t0 > SEED_MS) {
@@ -1007,7 +1129,12 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; }
     for (const p of patches) {
       const target = now < p.wake ? 0 : patchTarget(p, nGrow);
       if (reduce) p.rv = target;
-      else { const acc = 95 * (target - p.rv) - 11 * p.vel; p.vel += acc * dt; p.rv += p.vel * dt; if (target === 0 && p.rv < 2) { p.rv = 0; p.vel = 0; } }
+      else {
+        for (let k = 0, h = dt / steps; k < steps; k++) { p.vel += (95 * (target - p.rv) - 11 * p.vel) * h; p.rv += p.vel * h; }
+        if (target === 0 && p.rv < 2) { p.rv = 0; p.vel = 0; }
+        else if (Math.abs(target - p.rv) < 0.4 && Math.abs(p.vel) < 4) { p.rv = target; p.vel = 0; }   // at rest
+      }
+      if (Math.abs(p.rv - (p.drawnRv || 0)) > 0.05) lawnDirty = true;
       p.target = target;
       if (p.rv > 1) active.push(p);
     }
@@ -1020,18 +1147,31 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; }
       let out;
       if (p.flower && p.vote > 0) out = p.vote <= nGrow && (pr.rv > 1 || p.born !== undefined);
       else out = p.born !== undefined ? p.d < pr.target * edge + 4 : p.d + 12 < pr.rv * edge;
-      if (!out) { if (p.shCached) layersDirty = true; p.born = undefined; continue; }
-      if (p.born === undefined) p.born = Math.max(now, pr.wake) + (p.vote === nGrow ? 0 : p.delay);
+      if (!out) { if (p.shCached) layersDirty = true; else if (p.born !== undefined) dirty = true; p.born = undefined; continue; }
+      if (p.born === undefined) p.born = Math.max(now, pr.wake) + (p.vote === nGrow ? (p.seq || 0) * 45 : p.delay);   // a note's own flowers in a quick cascade
       if (!onScreen(p)) continue;
       if (!p.shCached && (reduce || now - p.born >= (DUR[p.sp] || 1100))) settle(p, now);
       if (!p.cached) live.push(p);
     }
+    let slotGrowing = false;
     for (const p of slotPlants) {
-      if (nGrow < p.at) { p.born = undefined; continue; }
+      if (nGrow < p.at) { if (p.born !== undefined) dirty = true; p.born = undefined; continue; }
       if (p.born === undefined) p.born = now + (p.at === nGrow ? 0 : Math.random() * 500);
+      if (now - p.born < 1200) slotGrowing = true;
     }
 
-    // paint
+    // counter number follows the ground under it
+    const covered = active.some(p => isoDist(counterPt.x, counterPt.y, p.c) < p.rv * 0.9);
+    const col = covered ? 'var(--lawn-deep)' : 'var(--blue)';
+    if (col !== countColor) { countColor = col; root.style.setProperty('--count-color', col); }
+
+    // paint only when something moves, plus one frame after, so whatever just stopped is painted at rest
+    const springing = active.some(p => Math.abs(p.rv - p.target) > 0.3 || Math.abs(p.vel) > 0.3);
+    const busy = !STILL || live.length > 0 || papers.length > 0 || seeds.length > 0 || rings.length > 0 || springing || slotGrowing;
+    if (!busy && !dirty) { requestAnimationFrame(frame); return; }
+    if (!STILL) watchSpeed(ms);
+    dirty = busy;
+
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.fillStyle = BLUE; ctx.fillRect(0, 0, cv.width, cv.height);
     drawLawn(active);
@@ -1051,13 +1191,13 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; }
     ctx.setTransform(BASE[0], BASE[1], BASE[2], BASE[3], BASE[4] + OFF.x * BASE[0], BASE[5] + OFF.y * BASE[3]);
     for (const part of BODY_PARTS) {
       ctx.fillStyle = part.fill; ctx.fill(part.p);
-      if (part.sw) { ctx.lineWidth = part.sw; ctx.strokeStyle = part.stroke; ctx.lineJoin = 'round'; ctx.stroke(part.p); }
+      if (part.sw) { ctx.lineWidth = part.sw * LINE_K; ctx.strokeStyle = part.stroke; ctx.lineJoin = 'round'; ctx.stroke(part.p); }
     }
     // the bouquet's shadow first crosses the lid; what passes its edge lands on the ground (drawn above)
     ctx.save(); ctx.clip(LID_TOP.p);
     liveShadows(ctx, now, 'lid');
     ctx.restore();
-    ctx.lineWidth = LID_TOP.sw; ctx.strokeStyle = INK; ctx.lineJoin = 'round'; ctx.stroke(LID_TOP.p);
+    ctx.lineWidth = LID_TOP.sw * LINE_K; ctx.strokeStyle = INK; ctx.lineJoin = 'round'; ctx.stroke(LID_TOP.p);
     for (const p of slotPlants) if (p.born !== undefined) drawLive(ctx, p, now);
     for (const pp of papers) drawPaper(pp, now, false);
 
@@ -1074,26 +1214,38 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; }
     }
     for (const sd of seeds) drawSeed(sd, now, false);
 
-    // counter number follows the ground under it
-    const covered = active.some(p => isoDist(counterPt.x, counterPt.y, p.c) < p.rv * 0.9);
-    root.style.setProperty('--count-color', covered ? 'var(--lawn-deep)' : 'var(--blue)');
-
     requestAnimationFrame(frame);
   }
 
   // ---------- live count ----------
   // live.js (Firebase) calls window.kalpiRemote(count) and provides window.kalpiVote().
   // Without it (a local file) the count lives in this page only.
-  let sim = false, liveCount = null;
+  // The counter stays hidden until the first real number (no flash of 0); a returning visitor
+  // starts from the last count this browser saw. A note cast before Firebase is ready waits for it.
+  const LIVE = !!(CONFIG.firebase && CONFIG.firebase.projectId);
+  let sim = false, liveCount = null, liveFailed = false, known = !LIVE;
+  function markKnown() { if (!known) { known = true; counterEl.classList.remove('waiting'); } }
   // target is in shown units (live + OFFSET); liveCount stays the real number in the database
-  window.kalpiRemote = v => { liveCount = v; if (!sim) setTarget(v + OFFSET); syncMode(); };
-  const COUNTER = { vote: () => window.kalpiVote ? window.kalpiVote() : (setTarget(target + 1), Promise.resolve()) };
+  window.kalpiRemote = v => {
+    liveCount = v; if (!sim) setTarget(v + OFFSET); syncMode(); markKnown();
+    try { localStorage.setItem('kalpi-count', String(v)); } catch (e) {}
+  };
+  window.kalpiLocal = () => { liveFailed = true; markKnown(); };
+  const waitLive = () => new Promise(res => {
+    const t0 = performance.now();
+    const tick = () => window.kalpiVote || liveFailed || performance.now() - t0 > 8000 ? res() : setTimeout(tick, 100);
+    tick();
+  });
+  const COUNTER = { vote: async () => {
+    if (LIVE) await waitLive();
+    return window.kalpiVote ? window.kalpiVote() : setTarget(target + 1);
+  } };
 
   // ---------- review panel (only with ?review, or in the preview file) ----------
   const REVIEW = CONFIG.review || /review/.test(location.search + location.hash);
   const panel = document.getElementById('panel');
   if (!REVIEW) panel.hidden = true;
-  const STATES = [['ריק', 0], ['פתק ראשון', 1], ['5', 5], ['15', 15], ['קלפי מלאה · 30', 30], ['60', 60], ['חלקי · 200', 200], ['חצי · 500', 500], ['כמעט · 800', 800], ['מלא · 1,000', 1000]];
+  const STATES = [['ריק', 0], ['פתק ראשון', 1], ['5', 5], ['איים · 6', 6], ['10', 10], ['20', 20], ['קלפי מלאה · 30', 30], ['45', 45], ['מלא · 60', 60]];
   const statesEl = document.getElementById('states');
   const modeEl = document.getElementById('mode'), backLive = document.getElementById('backLive');
   function simTo(v) { sim = true; setTarget(v); syncMode(); }
@@ -1282,13 +1434,125 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; }
   document.getElementById('openCombos').addEventListener('click', () => { combos.hidden = false; buildCombos(); });
   document.getElementById('closeCombos').addEventListener('click', closeCombos);
 
-  let resizeTimer = 0, booted = false;
+  // ---------- the note ----------
+  // The note is the paper itself: same size and the same perspective as it goes into the slot
+  // (upright, in the slot's plane: skewed 30°), from the first frame to the drop. It follows the mouse
+  // and goes into the box only with a click on the box; a click anywhere else shakes it.
+  // On touch it waits beside the box: tap it, tap the box, or drag it in.
+  const MESSAGES = ['תקווה', 'שלום', 'צמיחה', 'ביחד', 'פריחה', 'אחדות', 'מחר טוב יותר', 'אמון', 'אור', 'ניצנים', 'שורשים', 'התחלה חדשה'];
+  const pickMessage = () => MESSAGES[Math.floor(Math.random() * MESSAGES.length)];
+  const NOTE = { w: (SLOT_B.x - SLOT_A.x) * (PAPER_T[1] - PAPER_T[0]), h: PAPER_H, font: 28, skew: 30 };   // frame units
+  const FLY_MS = 420;
+  const noteEl = document.getElementById('note'), noteMsg = document.getElementById('noteMsg');
+  const note = { mode: 'rest', x: -999, y: -999, shake: -1e9, fly: null, drag: null, msg: '' };
+  let noteW = 0, noteH = 0, mouse = null;
+  const labelFont = () => getComputedStyle(root).getPropertyValue('--label-family').trim() + ', "Arial Hebrew", sans-serif';
+  const scr = (x, y) => ({ x: ox + x * sc, y: oy + y * sc });
+  const restPt = () => scr(OFF.x - 30, OFF.y + 30);                            // beside the lid's left corner
+  const slotPt = () => { const m = lerpPt(SLOT_A, SLOT_B, 0.5); return scr(m.x, m.y - 230 - PAPER_H / 2); };   // where the paper starts its drop
+  const overUI = el => !!(el && el.closest && el.closest('.share, .panel, .combos'));
+
+  function sizeNote() {
+    noteW = NOTE.w * sc; noteH = NOTE.h * sc;
+    Object.assign(noteEl.style, { width: noteW + 'px', height: noteH + 'px', fontSize: NOTE.font * sc + 'px', borderWidth: 2.5 * s + 'px' });
+    if (note.mode === 'rest') { const r = restPt(); note.x = r.x; note.y = r.y; }
+  }
+  function newNote() { note.msg = pickMessage(); noteMsg.textContent = note.msg; note.mode = mouse && !mouse.out ? 'follow' : 'rest'; noteEl.hidden = false; }
+  function hideNote() { note.mode = 'gone'; noteEl.hidden = true; root.classList.remove('following'); }
+  function throwNote() {
+    if (noteEl.hidden || note.mode === 'fly' || note.mode === 'gone') return false;
+    note.fly = { t0: performance.now(), x: note.x, y: note.y };
+    note.mode = 'fly'; root.classList.remove('following');
+    return true;
+  }
+  function placeNote(now, dt) {
+    if (note.mode === 'gone') return;
+    let x, y;
+    if (note.mode === 'fly') {
+      const f = note.fly, t = clamp((now - f.t0) / FLY_MS), e = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2, to = slotPt();
+      x = f.x + (to.x - f.x) * e; y = f.y + (to.y - f.y) * e - Math.sin(t * Math.PI) * 60 * s;   // a little arc
+      if (t >= 1) {
+        papers.push({ t0: now, msg: note.msg, font: labelFont() });
+        if (sim || !voted) newNote(); else return hideNote();
+        const r = restPt(); note.x = mouse && !mouse.out ? mouse.x : r.x; note.y = mouse && !mouse.out ? mouse.y : r.y;
+      }
+    } else {
+      let tx, ty;
+      if (note.mode === 'drag') { tx = note.drag.x + note.drag.dx; ty = note.drag.y + note.drag.dy; }
+      else if (note.mode === 'follow') { tx = mouse.x; ty = mouse.y + noteH * 0.25; }
+      else { const r = restPt(); tx = r.x; ty = r.y + (reduce ? 0 : Math.sin(now / 500) * 5 * s); }
+      const a = reduce || note.mode === 'drag' ? 1 : Math.min(1, dt * 16);
+      if (note.x < -900) { note.x = tx; note.y = ty; }   // first frame: no swoop in from the corner
+      note.x += (tx - note.x) * a; note.y += (ty - note.y) * a;
+      x = note.x; y = note.y;
+      const st = (now - note.shake) / 380;                                                            // "only into the box"
+      if (st < 1) x += Math.sin(st * 26) * noteW * 0.12 * (1 - st);
+    }
+    noteEl.style.transform = `translate(${x - noteW / 2}px, ${y - noteH / 2}px) skewY(${NOTE.skew}deg)`;
+  }
+
+  // mouse: the note follows; hidden over buttons and panels, where the normal cursor comes back
+  const canHover = matchMedia('(any-hover: hover)');   // phones send stray mouse events; only real mice drive the note
+  addEventListener('pointermove', e => {
+    if (e.pointerType !== 'mouse' || !canHover.matches) return;
+    mouse = { x: e.clientX, y: e.clientY, box: e.target === boxBtn, ui: overUI(e.target), out: false };
+    if (note.mode === 'rest') note.mode = 'follow';
+    noteEl.classList.toggle('off', note.mode === 'follow' && mouse.ui);
+    root.classList.toggle('following', note.mode === 'follow' && !mouse.ui);
+  });
+  root.addEventListener('mouseleave', () => {
+    if (mouse) mouse.out = true;
+    if (note.mode === 'follow') note.mode = 'rest';
+    noteEl.classList.remove('off'); root.classList.remove('following');
+  });
+  addEventListener('click', e => {
+    if ((note.mode === 'follow' || note.mode === 'rest') && e.target !== boxBtn && !overUI(e.target) && !noteEl.contains(e.target)) note.shake = performance.now();
+  });
+  // touch: drag the note into the box, or just tap it
+  noteEl.addEventListener('pointerdown', e => {
+    if (e.pointerType === 'mouse' || note.mode !== 'rest') return;
+    noteEl.setPointerCapture(e.pointerId);
+    note.drag = { id: e.pointerId, x: e.clientX, y: e.clientY, x0: e.clientX, y0: e.clientY, dx: note.x - e.clientX, dy: note.y - e.clientY };
+    note.mode = 'drag';
+  });
+  noteEl.addEventListener('pointermove', e => { if (note.drag && e.pointerId === note.drag.id) { note.drag.x = e.clientX; note.drag.y = e.clientY; } });
+  const endDrag = (e, cancel) => {
+    const d = note.drag; if (!d || e.pointerId !== d.id) return;
+    note.drag = null; note.mode = 'rest';
+    if (cancel) return;
+    const r = boxBtn.getBoundingClientRect(), tap = Math.hypot(d.x - d.x0, d.y - d.y0) < 10;
+    if (tap || (d.x > r.left && d.x < r.right && d.y > r.top && d.y < r.bottom)) castVote();
+  };
+  noteEl.addEventListener('pointerup', e => endDrag(e, false));
+  noteEl.addEventListener('pointercancel', e => endDrag(e, true));
+
+  // ---------- share ----------
+  const shareLabel = document.getElementById('shareLabel'), SHARE_LABEL = shareLabel.textContent;
+  const shareUrl = location.origin + location.pathname;   // without ?review
+  let shareTimer = 0;
+  async function copyLink() {
+    try { await navigator.clipboard.writeText(shareUrl); } catch (e) { return; }
+    shareLabel.textContent = 'הקישור הועתק';
+    clearTimeout(shareTimer); shareTimer = setTimeout(() => { shareLabel.textContent = SHARE_LABEL; }, 2200);
+  }
+  shareEl.addEventListener('click', async () => {
+    shareEl.classList.remove('nudge');
+    if (!navigator.share) return copyLink();
+    try { await navigator.share({ title: document.title, text: 'הוסיפו את הפתק שלכם', url: shareUrl }); }
+    catch (e) { if (e.name !== 'AbortError') copyLink(); }
+  });
+
+  // Phones fire resize for toolbars and the keyboard: only a real change of size grows a new garden
+  let resizeTimer = 0, booted = false, gardenW = 0, gardenH = 0;
   addEventListener('resize', () => {
     clearTimeout(resizeTimer);
     resizeTimer = setTimeout(() => {
       if (!hasSize()) return;
       if (!booted) return boot();
-      layout(); genGarden(); bloomTo(nGrow, performance.now());
+      layout();
+      if (innerWidth === gardenW && Math.abs(innerHeight - gardenH) < gardenH * 0.2) return;
+      gardenW = innerWidth; gardenH = innerHeight;
+      genGarden(); bloomTo(nGrow, performance.now());
     }, 150);
   });
 
@@ -1298,8 +1562,16 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; }
     booted = true;
     defineSpecies();
     genSlot();       // before layout(): its heads and leaves are rendered with the rest
+    newNote();
     layout();
+    gardenW = innerWidth; gardenH = innerHeight;
     genGarden();
+    if (LIVE) {
+      let last = null;
+      try { last = JSON.parse(localStorage.getItem('kalpi-count')); } catch (e) {}
+      if (Number.isFinite(last)) { setTarget(last + OFFSET); markKnown(); }
+      setTimeout(markKnown, 8000);   // never hide the counter for good
+    } else counterEl.classList.remove('waiting');
     showCount();
     syncMode();
     initFonts();
