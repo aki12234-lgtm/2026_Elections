@@ -111,6 +111,7 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; -webkit-user-selec
   will-change: transform; transition: opacity .15s;
 }
 .note span { width: 100%; }
+.note::before { content: ""; position: absolute; inset: -14px; }   /* easier to grab on touch */
 .note[hidden] { display: none; }
 .note.off { opacity: 0; }
 @media (hover: none) { .note { pointer-events: auto; touch-action: none; } }
@@ -787,7 +788,7 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; -webkit-user-selec
   }
 
   // ---------- vote: note → slot → (box full? seed → flower in a patch) ----------
-  const PAPER_H = 150, PAPER_MS = 720, SEED_MS = 760;
+  const PAPER_H = 200, PAPER_T = [0.1, 0.9], PAPER_MS = 720, SEED_MS = 760;   // PAPER_T: the paper's span along the slot
   function castVote() {
     if (voted && !sim) return;
     if (!sim) {
@@ -815,7 +816,7 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; -webkit-user-selec
   function paperQuad(d, sh) {
     const hb = Math.max(d, 0), ht = d + PAPER_H;
     if (ht <= 0) return null;
-    const S0 = lerpPt(SLOT_A, SLOT_B, 0.24), S1 = lerpPt(SLOT_A, SLOT_B, 0.76);
+    const S0 = lerpPt(SLOT_A, SLOT_B, PAPER_T[0]), S1 = lerpPt(SLOT_A, SLOT_B, PAPER_T[1]);
     const pt = (Sp, h) => sh ? { x: Sp.x + (H_LID + h) * V.x, y: Sp.y + H_LID + (H_LID + h) * V.y } : { x: Sp.x, y: Sp.y - h };
     return [pt(S0, hb), pt(S1, hb), pt(S1, ht), pt(S0, ht)];
   }
@@ -827,14 +828,14 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; -webkit-user-selec
     paint(ctx, WHITE, sh, 2.5 * LINE_K);
     if (sh || !pp.msg) return;
     // the message, upright in the paper's plane (x along the slot, y down), clipped to what's above the slot
-    const S0 = lerpPt(SLOT_A, SLOT_B, 0.24), S1 = lerpPt(SLOT_A, SLOT_B, 0.76);
+    const S0 = lerpPt(SLOT_A, SLOT_B, PAPER_T[0]), S1 = lerpPt(SLOT_A, SLOT_B, PAPER_T[1]);
     const L = Math.hypot(S1.x - S0.x, S1.y - S0.y), ux = (S1.x - S0.x) / L, uy = (S1.y - S0.y) / L, k = BASE[0];
     const cx = (S0.x + S1.x) / 2, cy = (S0.y + S1.y) / 2 - d - PAPER_H / 2;
     ctx.save(); ctx.clip();
-    ctx.setTransform(k * ux, k * uy, 0, k, BASE[4] + k * cx, BASE[5] + k * cy);
+    ctx.setTransform(k, k * uy / ux, 0, k, BASE[4] + k * cx, BASE[5] + k * cy);   // a vertical shear, like the note's skewY
     ctx.fillStyle = INK; ctx.font = `700 ${NOTE.font}px ${pp.font || 'sans-serif'}`;
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.direction = 'rtl';
-    const lines = wrapWords(ctx, pp.msg, L * 0.86), lh = NOTE.font * 1.05;
+    const lines = wrapWords(ctx, pp.msg, NOTE.w * 0.86), lh = NOTE.font * 1.05;
     lines.forEach((ln, i) => ctx.fillText(ln, 0, (i - (lines.length - 1) / 2) * lh));
     ctx.restore();
   }
@@ -1238,63 +1239,60 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; -webkit-user-selec
   });
 
   // ---------- the note ----------
-  // Follows the mouse (with a little lag and tilt) and goes into the box only with a click on the box;
-  // a click anywhere else shakes it. On touch it waits beside the box: tap it, tap the box, or drag it in.
+  // The note is the paper itself: same size and the same perspective as it goes into the slot
+  // (upright, in the slot's plane: skewed 30°), from the first frame to the drop. It follows the mouse
+  // and goes into the box only with a click on the box; a click anywhere else shakes it.
+  // On touch it waits beside the box: tap it, tap the box, or drag it in.
   const MESSAGES = ['תקווה', 'שלום', 'צמיחה', 'ביחד', 'פריחה', 'אחדות', 'מחר טוב יותר', 'אמון', 'אור', 'ניצנים', 'שורשים', 'התחלה חדשה'];
   const pickMessage = () => MESSAGES[Math.floor(Math.random() * MESSAGES.length)];
-  const NOTE = { w: 89.2, h: 150, font: 23 };   // = the paper in the slot, frame units (the slot is 30° off horizontal)
+  const NOTE = { w: (SLOT_B.x - SLOT_A.x) * (PAPER_T[1] - PAPER_T[0]), h: PAPER_H, font: 28, skew: 30 };   // frame units
   const FLY_MS = 420;
   const noteEl = document.getElementById('note'), noteMsg = document.getElementById('noteMsg');
-  const note = { mode: 'rest', x: -999, y: -999, rot: -8, k: 1, shake: -1e9, fly: null, drag: null, msg: '' };
-  let NOTE_K = 1, noteW = 0, noteH = 0, mouse = null;
+  const note = { mode: 'rest', x: -999, y: -999, shake: -1e9, fly: null, drag: null, msg: '' };
+  let noteW = 0, noteH = 0, mouse = null;
   const labelFont = () => getComputedStyle(root).getPropertyValue('--label-family').trim() + ', "Arial Hebrew", sans-serif';
   const toScreen = (x, y) => ({ x: ox + x * sc, y: oy + y * sc });
-  const restPt = () => toScreen(OFF.x - 24, OFF.y + 12);                       // beside the lid's left corner
-  const slotPt = () => { const m = lerpPt(SLOT_A, SLOT_B, 0.5); return toScreen(m.x, m.y - 230 - NOTE.h / 2); };   // where the paper starts its drop
+  const restPt = () => toScreen(OFF.x - 30, OFF.y + 30);                       // beside the lid's left corner
+  const slotPt = () => { const m = lerpPt(SLOT_A, SLOT_B, 0.5); return toScreen(m.x, m.y - 230 - PAPER_H / 2); };   // where the paper starts its drop
   const overUI = el => !!(el && el.closest && el.closest('.share, .panel, .combos'));
 
   function sizeNote() {
-    NOTE_K = PORTRAIT ? 1.8 : 1.2;                 // bigger than the paper in the slot, so it reads (and is easy to grab)
-    noteW = NOTE.w * sc * NOTE_K; noteH = NOTE.h * sc * NOTE_K;
-    Object.assign(noteEl.style, { width: noteW + 'px', height: noteH + 'px', fontSize: NOTE.font * sc * NOTE_K + 'px',
-      borderWidth: 2.5 * s + 'px', boxShadow: `${8 * s}px ${3.6 * s}px 0 ${INK}` });
+    noteW = NOTE.w * sc; noteH = NOTE.h * sc;
+    Object.assign(noteEl.style, { width: noteW + 'px', height: noteH + 'px', fontSize: NOTE.font * sc + 'px', borderWidth: 2.5 * s + 'px' });
     if (note.mode === 'rest') { const r = restPt(); note.x = r.x; note.y = r.y; }
   }
   function newNote() { note.msg = pickMessage(); noteMsg.textContent = note.msg; note.mode = mouse && !mouse.out ? 'follow' : 'rest'; noteEl.hidden = false; }
   function hideNote() { note.mode = 'gone'; noteEl.hidden = true; root.classList.remove('following'); }
   function throwNote() {
     if (noteEl.hidden || note.mode === 'fly' || note.mode === 'gone') return false;
-    note.fly = { t0: performance.now(), x: note.x, y: note.y, rot: note.rot, k: note.k };
+    note.fly = { t0: performance.now(), x: note.x, y: note.y };
     note.mode = 'fly'; root.classList.remove('following');
     return true;
   }
   function placeNote(now, dt) {
     if (note.mode === 'gone') return;
-    let x, y, rot, k = 1, skew = 0;
+    let x, y;
     if (note.mode === 'fly') {
       const f = note.fly, t = clamp((now - f.t0) / FLY_MS), e = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2, to = slotPt();
       x = f.x + (to.x - f.x) * e; y = f.y + (to.y - f.y) * e - Math.sin(t * Math.PI) * 60 * s;   // a little arc
-      rot = f.rot * (1 - e); k = f.k + (1 / NOTE_K - f.k) * e; skew = 30 * e;                      // ends as the paper over the slot
       if (t >= 1) {
         papers.push({ t0: now, msg: note.msg, font: labelFont() });
         if (sim || !voted) newNote(); else return hideNote();
         const r = restPt(); note.x = mouse && !mouse.out ? mouse.x : r.x; note.y = mouse && !mouse.out ? mouse.y : r.y;
       }
     } else {
-      let tx, ty, trot = -8, tk = 1;
-      if (note.mode === 'drag') { tx = note.drag.x + note.drag.dx; ty = note.drag.y + note.drag.dy; trot = -3; tk = 1.06; }
-      else if (note.mode === 'follow') { tx = mouse.x; ty = mouse.y + noteH * 0.2; trot = mouse.box ? 0 : -6; tk = mouse.box ? 1.08 : 1; }
+      let tx, ty;
+      if (note.mode === 'drag') { tx = note.drag.x + note.drag.dx; ty = note.drag.y + note.drag.dy; }
+      else if (note.mode === 'follow') { tx = mouse.x; ty = mouse.y + noteH * 0.25; }
       else { const r = restPt(); tx = r.x; ty = r.y + (reduce ? 0 : Math.sin(now / 500) * 5 * s); }
       const a = reduce || note.mode === 'drag' ? 1 : Math.min(1, dt * 16);
       if (note.x < -900) { note.x = tx; note.y = ty; }   // first frame: no swoop in from the corner
       note.x += (tx - note.x) * a; note.y += (ty - note.y) * a;
-      note.rot += (clamp(trot + (tx - note.x) * 0.25, -22, 22) - note.rot) * Math.min(1, dt * 12);   // leans into the motion
-      note.k += (tk - note.k) * Math.min(1, dt * 12);
-      x = note.x; y = note.y; rot = note.rot; k = note.k;
+      x = note.x; y = note.y;
       const st = (now - note.shake) / 380;                                                            // "only into the box"
-      if (st < 1) { x += Math.sin(st * 26) * noteW * 0.12 * (1 - st); rot += Math.sin(st * 26) * 4 * (1 - st); }
+      if (st < 1) x += Math.sin(st * 26) * noteW * 0.12 * (1 - st);
     }
-    noteEl.style.transform = `translate(${x - noteW / 2}px, ${y - noteH / 2}px) rotate(${rot}deg) skewY(${skew}deg) scale(${k})`;
+    noteEl.style.transform = `translate(${x - noteW / 2}px, ${y - noteH / 2}px) skewY(${NOTE.skew}deg)`;
   }
 
   // mouse: the note follows; hidden over buttons and panels, where the normal cursor comes back
