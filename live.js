@@ -9,7 +9,7 @@ async function findDatabase() {
   const urls = [...new Set([cfg.databaseURL, `https://${id}-default-rtdb.firebaseio.com`, `https://${id}-default-rtdb.europe-west1.firebasedatabase.app`].filter(Boolean))];
   for (const url of urls) {
     try {
-      const res = await fetch(`${url}/votes/count.json`, { signal: AbortSignal.timeout(5000) });
+      const res = await fetch(`${url}/votes/count.json`, AbortSignal.timeout ? { signal: AbortSignal.timeout(5000) } : {});   // no timeout() before iOS 16
       if (res.ok) return url;
     } catch (e) { /* next */ }
   }
