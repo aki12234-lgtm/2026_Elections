@@ -27,22 +27,9 @@
 <link id="kit" rel="stylesheet" href="https://use.typekit.net/nsr0kgo.css">
 <script src="config.js"></script>
 <style>
-/* Tel Aviv by Fontef: Website License #04813, this domain only. Files stay exactly as delivered (no conversion, subsetting or base64). */
-/* ET Argazim by Elad Type (owner has permission): one variable file, wght 300–900 and a slant axis "ital" 0–12.
-   The file's default instance is Black Italic, so every use sets "ital" 0 (or 12, on purpose) explicitly. */
+/* ET Argazim by Elad Type (owner has permission), the only typeface: one variable file, wght 300–900 and a slant
+   axis "ital" 0–12. The file's default instance is Black Italic, so every use sets "ital" explicitly. */
 @font-face { font-family: "et-argazim"; src: url("fonts/et-argazim/ETArgazim-VariableVF.woff2") format("woff2"); font-weight: 300 900; font-style: normal; font-display: swap; }
-@font-face { font-family: "tel-aviv-brutalist"; src: url("fonts/tel-aviv/telaviv-brutalistlight.woff2") format("woff2"); font-weight: 300; font-display: block; }
-@font-face { font-family: "tel-aviv-brutalist"; src: url("fonts/tel-aviv/telaviv-brutalistregular.woff2") format("woff2"); font-weight: 400; font-display: block; }
-@font-face { font-family: "tel-aviv-brutalist"; src: url("fonts/tel-aviv/telaviv-brutalistbold.woff2") format("woff2"); font-weight: 700; font-display: block; }
-@font-face { font-family: "tel-aviv-modernist"; src: url("fonts/tel-aviv/telaviv-modernistregular.woff2") format("woff2"); font-weight: 400; font-display: block; }
-@font-face { font-family: "tel-aviv-modernist"; src: url("fonts/tel-aviv/telaviv-modernistbold.woff2") format("woff2"); font-weight: 700; font-display: block; }
-/* Eclectic ships one file per script; unicode-range joins each number into one family. */
-@font-face { font-family: "tel-aviv-eclectic-1"; src: url("fonts/tel-aviv/telaviv-eclectichebrewno.1.woff2") format("woff2"); unicode-range: U+0590-05FF, U+FB1D-FB4F; font-display: block; }
-@font-face { font-family: "tel-aviv-eclectic-1"; src: url("fonts/tel-aviv/telaviv-eclecticlatinno.1.woff2") format("woff2"); unicode-range: U+0000-024F, U+2000-206F, U+20AA; font-display: block; }
-@font-face { font-family: "tel-aviv-eclectic-1"; src: url("fonts/tel-aviv/telaviv-eclecticarabicno.1.woff2") format("woff2"); unicode-range: U+0600-06FF, U+0750-077F, U+FB50-FDFF, U+FE70-FEFF; font-display: block; }
-@font-face { font-family: "tel-aviv-eclectic-2"; src: url("fonts/tel-aviv/telaviv-eclectichebrewno.2.woff2") format("woff2"); unicode-range: U+0590-05FF, U+FB1D-FB4F; font-display: block; }
-@font-face { font-family: "tel-aviv-eclectic-2"; src: url("fonts/tel-aviv/telaviv-eclecticlatinno.2.woff2") format("woff2"); unicode-range: U+0000-024F, U+2000-206F, U+20AA; font-display: block; }
-@font-face { font-family: "tel-aviv-eclectic-2"; src: url("fonts/tel-aviv/telaviv-eclecticarabicno.2.woff2") format("woff2"); unicode-range: U+0600-06FF, U+0750-077F, U+FB50-FDFF, U+FE70-FEFF; font-display: block; }
 
 /* Composition = the Figma frame (1920×1080). Everything scales by --s; UI anchors to the viewport edges with 64-unit padding. */
 :root {
@@ -53,8 +40,11 @@
   --paper: #ffffff;
   --count-color: var(--blue);
   /* roles (overwritten from the kit at runtime) */
-  --display-family: "tel-aviv-brutalist"; --display-weight: 700; --display-stretch: normal; --display-style: normal;
-  --num-family: "et-argazim"; --num-weight: 900; --num-stretch: normal; --num-style: normal; --num-vars: "ital" 0; --num-size: 120.401;
+  --display-family: "et-argazim"; --display-weight: 900; --display-stretch: normal; --display-style: normal; --display-vars: "ital" 0;
+  --display-size: 100; --display-size-portrait: 100;   /* the longer line: ~750 of the 1920 frame, ~750 of 930 in portrait */
+  --display-stroke: 5;   /* 2.5 outside, like every outline */
+  --display-shadow: none;
+  --num-family: "et-argazim"; --num-weight: 900; --num-stretch: normal; --num-style: normal; --num-vars: "ital" 12; --num-size: 132;   /* Black Italic: the owner picked it */
   --label-family: "et-argazim"; --label-weight: 500; --label-stretch: normal; --label-style: normal; --label-vars: "ital" 0; --label-size: 32;
   --ui-weight: 700;     /* share button */
   --note-weight: 700;   /* the message on the note */
@@ -70,17 +60,19 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; -webkit-user-selec
 .headline {
   position: absolute; margin: 0;
   top: calc(64px * var(--s) + env(safe-area-inset-top, 0px)); right: calc(64px * var(--s) + env(safe-area-inset-right, 0px));
-  width: calc(696.035px * var(--s));
-  font-family: var(--display-family), "tel-aviv-brutalist", "Arial Black", "Arial Hebrew", sans-serif;
+  width: max-content;
+  font-family: var(--display-family), "et-argazim", "Arial Black", "Arial Hebrew", sans-serif;
   font-weight: var(--display-weight); font-stretch: var(--display-stretch); font-style: var(--display-style);
-  font-size: calc(95px * var(--s)); line-height: .8;   /* two lines (<br> in the markup); the longer one fills the 696 box */
-  color: var(--paper); text-align: right; direction: rtl; word-break: break-word;
-  -webkit-text-stroke: calc(5px * var(--s)) var(--ink); paint-order: stroke fill; /* 2.5 outside stroke */
+  font-variation-settings: var(--display-vars);
+  font-size: calc(var(--display-size-portrait) * 1px * var(--s)); line-height: .8;   /* two lines (<br> in the markup) */
+  color: var(--paper); text-align: right; direction: rtl;
+  -webkit-text-stroke: calc(var(--display-stroke) * 1px * var(--s)) var(--ink); paint-order: stroke fill;
+  text-shadow: var(--display-shadow);
   text-box: trim-both cap alphabetic;
 }
-/* desktop (the landscape layout, W/H ≥ 0.9 as in layout()): 15% larger; the box follows the longer line instead of 696 */
+/* desktop (the landscape layout, W/H ≥ 0.9 as in layout()) */
 @media (min-aspect-ratio: 9/10) {
-  .headline { font-size: calc(109.25px * var(--s)); width: max-content; }
+  .headline { font-size: calc(var(--display-size) * 1px * var(--s)); }
 }
 .counter {
   position: absolute;
@@ -1345,7 +1337,7 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; -webkit-user-selec
   const KIT_URL = 'https://use.typekit.net/nsr0kgo.css';
   const WEIGHTS = { 100: 'Thin', 200: 'ExtraLight', 300: 'Light', 400: 'Regular', 500: 'Medium', 600: 'SemiBold', 700: 'Bold', 800: 'ExtraBold', 900: 'Black' };
   const cssWeight = role => +getComputedStyle(root).getPropertyValue(`--${role}-weight`) || 400;
-  const ROLE_W = { display: 700, num: cssWeight('num'), label: cssWeight('label') };
+  const ROLE_W = { display: cssWeight('display'), num: cssWeight('num'), label: cssWeight('label') };
   let faces = [];
   const roleSel = { display: document.getElementById('displaySel'), num: document.getElementById('numSel'), label: document.getElementById('labelSel') };
   const roleOk = { display: document.getElementById('displayOk'), num: document.getElementById('numOk'), label: document.getElementById('labelOk') };
@@ -1436,7 +1428,7 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; -webkit-user-selec
     let saved = {};
     try { for (const role of Object.keys(roleSel)) saved[role] = localStorage.getItem(FONT_KEY + role); } catch (e) {}
     const idxOf = lbl => lbl ? faces.findIndex(fc => faceLabel(fc) === lbl) : -1;
-    const def = { display: pickDefault(/tel-aviv-brutalist/i, 700), num: pickDefault(/argazim/i, ROLE_W.num), label: pickDefault(/argazim/i, ROLE_W.label) };
+    const def = { display: pickDefault(/argazim/i, ROLE_W.display), num: pickDefault(/argazim/i, ROLE_W.num), label: pickDefault(/argazim/i, ROLE_W.label) };
     for (const role of Object.keys(roleSel)) choose(role, idxOf(saved[role]) >= 0 ? idxOf(saved[role]) : def[role]);
   }
 
