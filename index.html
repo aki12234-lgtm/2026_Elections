@@ -132,7 +132,7 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; -webkit-user-selec
   display: grid; place-items: center; padding: .3em; text-align: center; direction: rtl;
   background: var(--paper); color: var(--ink); border: solid var(--ink);
   font-family: var(--label-family), "et-argazim", "narkiss-yair-variable", "Arial Hebrew", sans-serif;
-  font-weight: var(--note-weight); font-variation-settings: var(--note-vars); line-height: 1.05; overflow-wrap: break-word;
+  font-weight: var(--note-weight); font-variation-settings: var(--note-vars); line-height: 1.05; overflow-wrap: normal;
   will-change: transform; transition: opacity .15s;
 }
 .note-paper span { width: 100%; }
@@ -1039,7 +1039,8 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; -webkit-user-selec
     }
     if (reduce) { if (!sim) hideNote(); return sendVote(); }
     if (throwNote()) return;                      // the note flies to the slot, then drops in as the paper
-    papers.push({ t0: performance.now(), msg: pickMessage(), font: labelFont(), weight: noteWeight() });
+    const msg = pickMessage();
+    papers.push({ t0: performance.now(), msg, size: fitSize(msg), font: labelFont(), weight: noteWeight() });
   }
   function sendVote() {
     if (sim) { setTarget(target + 1); return; }
@@ -1073,9 +1074,10 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; -webkit-user-selec
     const cx = (S0.x + S1.x) / 2, cy = (S0.y + S1.y) / 2 - d - PAPER_H / 2;
     ctx.save(); ctx.clip();
     ctx.setTransform(k, k * (S1.y - S0.y) / (S1.x - S0.x), 0, k, BASE[4] + k * cx, BASE[5] + k * cy);
-    ctx.fillStyle = INK; ctx.font = `${pp.weight || 700} ${NOTE.font}px ${pp.font || 'sans-serif'}`;
+    const fs = pp.size || NOTE.font;
+    ctx.fillStyle = INK; ctx.font = `${pp.weight || 700} ${fs}px ${pp.font || 'sans-serif'}`;
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.direction = 'rtl';
-    const lines = wrapWords(ctx, pp.msg, NOTE.w * 0.86), lh = NOTE.font * 1.05;
+    const lines = wrapWords(ctx, pp.msg, NOTE.w * 0.76), lh = fs * 1.05;
     lines.forEach((ln, i) => ctx.fillText(ln, 0, (i - (lines.length - 1) / 2) * lh));
     ctx.restore();
   }
@@ -1477,16 +1479,36 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; -webkit-user-selec
   const labelFont = () => getComputedStyle(root).getPropertyValue('--label-family').trim() + ', "Arial Hebrew", sans-serif';
   const noteWeight = () => getComputedStyle(root).getPropertyValue('--note-weight').trim() || 700;
   const scr = (x, y) => ({ x: ox + x * sc, y: oy + y * sc });
-  const restPt = () => scr(OFF.x - 30, OFF.y + 30);                            // beside the lid's left corner
+  const restPt = () => {   // beside the lid's left corner; a zoomed note grows up and out, away from the box
+    const r = scr(OFF.x - 30, OFF.y + 30), g = 1 - 1 / NOTE_Z;
+    return { x: r.x - noteW * g / 2, y: r.y - noteH * g / 2 };
+  };
   const slotPt = () => { const m = lerpPt(SLOT_A, SLOT_B, 0.5); return scr(m.x, m.y - 230 - PAPER_H / 2); };   // where the paper starts its drop
   const overUI = el => !!(el && el.closest && el.closest('.share, .panel, .combos'));
 
+  // the message stays inside the paper: the largest size (up to NOTE.font) at which its longest word fits the width
+  const fitCtx = document.createElement('canvas').getContext('2d');
+  function fitSize(msg) {
+    fitCtx.font = `${noteWeight()} 100px ${labelFont()}`;   // canvas draws the file's default italic, like the note
+    const widest = Math.max(...msg.split(' ').map(w => fitCtx.measureText(w).width)) / 100;
+    return Math.min(NOTE.font, NOTE.w * 0.72 / widest);   // 0.72: the paper minus its .3em padding, the italic's overhang and a margin
+  }
+  // On phones the paper is too small to read, so the note is drawn 1.6× and shrinks to the paper as it flies in
+  // (same perspective throughout). NOTE_Z is that zoom.
+  let NOTE_Z = 1;
   function sizeNote() {
-    noteW = NOTE.w * sc; noteH = NOTE.h * sc;
-    Object.assign(noteEl.style, { width: noteW + 'px', height: noteH + 'px', fontSize: NOTE.font * sc + 'px', borderWidth: 2.5 * s + 'px' });
+    NOTE_Z = PORTRAIT ? 1.6 : 1;
+    noteW = NOTE.w * sc * NOTE_Z; noteH = NOTE.h * sc * NOTE_Z;
+    Object.assign(noteEl.style, { width: noteW + 'px', height: noteH + 'px', fontSize: (note.size || NOTE.font) * sc * NOTE_Z + 'px', borderWidth: 2.5 * s + 'px' });
     if (note.mode === 'rest') { const r = restPt(); note.x = r.x; note.y = r.y; }
   }
-  function newNote() { note.msg = pickMessage(); noteMsg.textContent = note.msg; note.mode = mouse && !mouse.out ? 'follow' : 'rest'; noteEl.hidden = false; }
+  function newNote() {
+    note.msg = pickMessage(); note.size = fitSize(note.msg); noteMsg.textContent = note.msg;
+    noteEl.style.fontSize = note.size * sc * NOTE_Z + 'px';
+    note.mode = mouse && !mouse.out ? 'follow' : 'rest'; noteEl.hidden = false;
+  }
+  // measured again once Argazim has loaded (the first measure may be the fallback font)
+  document.fonts.load(`700 100px "et-argazim"`).then(() => { note.size = fitSize(note.msg); noteEl.style.fontSize = note.size * sc * NOTE_Z + 'px'; }).catch(() => {});
   function hideNote() { note.mode = 'gone'; noteEl.hidden = true; root.classList.remove('following'); }
   function throwNote() {
     if (noteEl.hidden || note.mode === 'fly' || note.mode === 'gone') return false;
@@ -1496,12 +1518,13 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; -webkit-user-selec
   }
   function placeNote(now, dt) {
     if (note.mode === 'gone') return;
-    let x, y;
+    let x, y, k = 1;
     if (note.mode === 'fly') {
       const f = note.fly, t = clamp((now - f.t0) / FLY_MS), e = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2, to = slotPt();
       x = f.x + (to.x - f.x) * e; y = f.y + (to.y - f.y) * e - Math.sin(t * Math.PI) * 60 * s;   // a little arc
+      k = 1 + (1 / NOTE_Z - 1) * e;                                                                // down to the paper's size
       if (t >= 1) {
-        papers.push({ t0: now, msg: note.msg, font: labelFont(), weight: noteWeight() });
+        papers.push({ t0: now, msg: note.msg, size: note.size, font: labelFont(), weight: noteWeight() });
         if (sim || !voted) newNote(); else return hideNote();
         const r = restPt(); note.x = mouse && !mouse.out ? mouse.x : r.x; note.y = mouse && !mouse.out ? mouse.y : r.y;
       }
@@ -1517,7 +1540,7 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; -webkit-user-selec
       const st = (now - note.shake) / 380;                                                            // "only into the box"
       if (st < 1) x += Math.sin(st * 26) * noteW * 0.12 * (1 - st);
     }
-    noteEl.style.transform = `translate(${x - noteW / 2}px, ${y - noteH / 2}px) skewY(${NOTE.skew}deg)`;
+    noteEl.style.transform = `translate(${x - noteW / 2}px, ${y - noteH / 2}px) skewY(${NOTE.skew}deg) scale(${k})`;
   }
 
   // mouse: the note follows; hidden over buttons and panels, where the normal cursor comes back
