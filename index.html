@@ -63,10 +63,14 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; }
   width: calc(696.035px * var(--s));
   font-family: var(--display-family), "tel-aviv-brutalist", "Arial Black", "Arial Hebrew", sans-serif;
   font-weight: var(--display-weight); font-stretch: var(--display-stretch); font-style: var(--display-style);
-  font-size: calc(124.83px * var(--s)); line-height: .8;
+  font-size: calc(95px * var(--s)); line-height: .8;   /* two lines (<br> in the markup); the longer one fills the 696 box */
   color: var(--paper); text-align: right; direction: rtl; word-break: break-word;
   -webkit-text-stroke: calc(5px * var(--s)) var(--ink); paint-order: stroke fill; /* 2.5 outside stroke */
   text-box: trim-both cap alphabetic;
+}
+/* desktop (the landscape layout, W/H ≥ 0.9 as in layout()): 15% larger; the box follows the longer line instead of 696 */
+@media (min-aspect-ratio: 9/10) {
+  .headline { font-size: calc(109.25px * var(--s)); width: max-content; }
 }
 .counter {
   position: absolute;
@@ -172,7 +176,7 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; }
 <div id="safe" aria-hidden="true" style="position:fixed;visibility:hidden;pointer-events:none;padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)"></div>
 
 <main class="frame-ui">
-  <h1 class="headline">הוסיפו את הפתק שלכם</h1>
+  <h1 class="headline">הוסיפו את<br>הפתק שלכם</h1>
   <div class="counter" aria-live="polite"><b id="num">0</b><span>פתקים הצטרפו לגינה</span></div>
 </main>
 
@@ -309,8 +313,10 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; }
       // phone / portrait: same components at a larger relative size; the box sits between
       // the headline and the counter, with room above the lid for the bouquet
       s = Math.min(W / 930, H / 1700);
+      root.style.setProperty('--s', s);                 // so the headline below is measured at this scale
       const safe = getComputedStyle(document.getElementById('safe'));
-      const headBottom = 64 + 174 + parseFloat(safe.paddingTop) / s, counterTop = (H - parseFloat(safe.paddingBottom)) / s - 64 - 165;
+      const headH = document.querySelector('.headline').getBoundingClientRect().height / s;
+      const headBottom = 64 + headH + parseFloat(safe.paddingTop) / s, counterTop = (H - parseFloat(safe.paddingBottom)) / s - 64 - 165;
       const bouquet = 330, below = 700;                 // above the lid top / lid top to box bottom
       const lidTop = headBottom + bouquet + Math.max(20, (counterTop - headBottom - bouquet - below) / 2);
       ox = W * 0.44 - (OFF.x + 335) * s;
@@ -1079,7 +1085,7 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; }
       const card = document.createElement('button');
       card.type = 'button'; card.className = 'card';
       if (+roleSel.display.value === di && +roleSel.num.value === ni && +roleSel.label.value === li) card.classList.add('current');
-      card.innerHTML = `<div class="mini"><img alt="" src="${boxImg}"><h2 class="headline">הוסיפו את הפתק שלכם</h2>
+      card.innerHTML = `<div class="mini"><img alt="" src="${boxImg}"><h2 class="headline">הוסיפו את<br>הפתק שלכם</h2>
         <div class="counter"><b>128</b><span>פתקים הצטרפו לגינה</span></div></div>
         <div class="cap"><span>${faceLabel(faces[di])}</span><span>${faceLabel(faces[ni])}</span></div>`;
       applyFont('display', faces[di], card); applyFont('num', faces[ni], card); applyFont('label', faces[li], card);
