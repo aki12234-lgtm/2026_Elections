@@ -28,6 +28,9 @@
 <script src="config.js"></script>
 <style>
 /* Tel Aviv by Fontef: Website License #04813, this domain only. Files stay exactly as delivered (no conversion, subsetting or base64). */
+/* ET Argazim by Elad Type (owner has permission): one variable file, wght 300–900 and a slant axis "ital" 0–12.
+   The file's default instance is Black Italic, so every use sets "ital" 0 (or 12, on purpose) explicitly. */
+@font-face { font-family: "et-argazim"; src: url("fonts/et-argazim/ETArgazim-VariableVF.woff2") format("woff2"); font-weight: 300 900; font-style: normal; font-display: swap; }
 @font-face { font-family: "tel-aviv-brutalist"; src: url("fonts/tel-aviv/telaviv-brutalistlight.woff2") format("woff2"); font-weight: 300; font-display: block; }
 @font-face { font-family: "tel-aviv-brutalist"; src: url("fonts/tel-aviv/telaviv-brutalistregular.woff2") format("woff2"); font-weight: 400; font-display: block; }
 @font-face { font-family: "tel-aviv-brutalist"; src: url("fonts/tel-aviv/telaviv-brutalistbold.woff2") format("woff2"); font-weight: 700; font-display: block; }
@@ -51,8 +54,11 @@
   --count-color: var(--blue);
   /* roles (overwritten from the kit at runtime) */
   --display-family: "tel-aviv-brutalist"; --display-weight: 700; --display-stretch: normal; --display-style: normal;
-  --num-family: "narkiss-yair-variable"; --num-weight: 400; --num-stretch: normal; --num-style: normal; --num-vars: "MONO" 100;
-  --label-family: "narkiss-yair-variable"; --label-weight: 400; --label-stretch: normal; --label-style: normal;
+  --num-family: "et-argazim"; --num-weight: 900; --num-stretch: normal; --num-style: normal; --num-vars: "ital" 0; --num-size: 120.401;
+  --label-family: "et-argazim"; --label-weight: 500; --label-stretch: normal; --label-style: normal; --label-vars: "ital" 0; --label-size: 32;
+  --ui-weight: 700;     /* share button */
+  --note-weight: 700;   /* the message on the note */
+  --note-vars: "ital" 12;   /* slanted: canvas can't set axes, so the paper dropping in the slot is always the file's italic; the note matches it */
   color-scheme: light;
 }
 html, body { margin: 0; height: 100%; overflow: hidden; overscroll-behavior: none; background: var(--blue); }
@@ -87,16 +93,17 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; -webkit-user-selec
 }
 .counter.waiting { opacity: 0; }   /* until the real count arrives: never a flash of 0 */
 .counter b {
-  font-family: var(--num-family), "narkiss-yair-variable", "narkiss-yair", "Narkiss Yair Variable", "Arial Hebrew", sans-serif;
+  font-family: var(--num-family), "et-argazim", "narkiss-yair-variable", "Arial Hebrew", sans-serif;
   font-weight: var(--num-weight); font-stretch: var(--num-stretch); font-style: var(--num-style);
   font-variation-settings: var(--num-vars);
-  font-size: calc(120.401px * var(--s)); font-variant-numeric: tabular-nums slashed-zero;
+  font-size: calc(var(--num-size) * 1px * var(--s)); font-variant-numeric: tabular-nums slashed-zero;
   text-box: trim-both cap alphabetic;
 }
 .counter span {
-  font-family: var(--label-family), "narkiss-yair-variable", "narkiss-yair", "Narkiss Yair Variable", "Arial Hebrew", sans-serif;
+  font-family: var(--label-family), "et-argazim", "narkiss-yair-variable", "Arial Hebrew", sans-serif;
   font-weight: var(--label-weight); font-stretch: var(--label-stretch); font-style: var(--label-style);
-  font-size: calc(32px * var(--s)); text-align: right; direction: rtl;
+  font-variation-settings: var(--label-vars);
+  font-size: calc(var(--label-size) * 1px * var(--s)); text-align: right; direction: rtl;
   text-box: trim-both cap alphabetic;
 }
 
@@ -108,8 +115,8 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; -webkit-user-selec
   display: flex; align-items: center; gap: .5em;
   padding: .6em .85em;
   background: var(--paper); color: var(--ink); border: max(1px, calc(2.5px * var(--s))) solid var(--ink);
-  font-family: var(--label-family), "narkiss-yair-variable", "narkiss-yair", "Narkiss Yair Variable", "Arial Hebrew", sans-serif;
-  font-weight: 500; font-size: max(13px, calc(22px * var(--s))); line-height: 1; white-space: nowrap; direction: rtl;
+  font-family: var(--label-family), "et-argazim", "narkiss-yair-variable", "Arial Hebrew", sans-serif;
+  font-weight: var(--ui-weight); font-variation-settings: var(--label-vars); font-size: max(13px, calc(22px * var(--s))); line-height: 1; white-space: nowrap; direction: rtl;
   cursor: pointer; -webkit-tap-highlight-color: transparent; touch-action: manipulation;
   transition: background-color .12s, color .12s;
 }
@@ -132,8 +139,8 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; -webkit-user-selec
   position: fixed; left: 0; top: 0; z-index: 3; pointer-events: none; box-sizing: border-box;
   display: grid; place-items: center; padding: .3em; text-align: center; direction: rtl;
   background: var(--paper); color: var(--ink); border: solid var(--ink);
-  font-family: var(--label-family), "narkiss-yair-variable", "narkiss-yair", "Narkiss Yair Variable", "Arial Hebrew", sans-serif;
-  font-weight: 700; line-height: 1.05; overflow-wrap: break-word;
+  font-family: var(--label-family), "et-argazim", "narkiss-yair-variable", "Arial Hebrew", sans-serif;
+  font-weight: var(--note-weight); font-variation-settings: var(--note-vars); line-height: 1.05; overflow-wrap: break-word;
   will-change: transform; transition: opacity .15s;
 }
 .note-paper span { width: 100%; }
@@ -269,7 +276,7 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; -webkit-user-selec
       <div class="field"><label for="displaySel">כותרת <i id="displayOk"></i></label><select id="displaySel"></select></div>
       <div class="field" style="margin-top:8px"><label for="numSel">מספר <i id="numOk"></i></label><select id="numSel"></select></div>
       <div class="field" style="margin-top:8px"><label for="labelSel">טקסט המונה <i id="labelOk"></i></label><select id="labelSel"></select></div>
-      <div class="field" style="margin-top:8px"><label for="numVars">צירים למספר (Mono)</label><input id="numVars" type="text" value='"MONO" 100' spellcheck="false"></div>
+      <div class="field" style="margin-top:8px"><label for="numVars">צירים למספר (Mono)</label><input id="numVars" type="text" value='"ital" 0' spellcheck="false"></div>
       <div class="row" style="margin-top:8px"><button class="chip" type="button" id="openCombos">השוואת שילובים</button></div>
       <p class="note" id="kitNote">טוען את הפונטים מהקיט…</p>
     </section>
@@ -1040,7 +1047,7 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; -webkit-user-selec
     }
     if (reduce) { if (!sim) hideNote(); return sendVote(); }
     if (throwNote()) return;                      // the note flies to the slot, then drops in as the paper
-    papers.push({ t0: performance.now(), msg: pickMessage(), font: labelFont() });
+    papers.push({ t0: performance.now(), msg: pickMessage(), font: labelFont(), weight: noteWeight() });
   }
   function sendVote() {
     if (sim) { setTarget(target + 1); return; }
@@ -1074,7 +1081,7 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; -webkit-user-selec
     const cx = (S0.x + S1.x) / 2, cy = (S0.y + S1.y) / 2 - d - PAPER_H / 2;
     ctx.save(); ctx.clip();
     ctx.setTransform(k, k * (S1.y - S0.y) / (S1.x - S0.x), 0, k, BASE[4] + k * cx, BASE[5] + k * cy);
-    ctx.fillStyle = INK; ctx.font = `700 ${NOTE.font}px ${pp.font || 'sans-serif'}`;
+    ctx.fillStyle = INK; ctx.font = `${pp.weight || 700} ${NOTE.font}px ${pp.font || 'sans-serif'}`;
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.direction = 'rtl';
     const lines = wrapWords(ctx, pp.msg, NOTE.w * 0.86), lh = NOTE.font * 1.05;
     lines.forEach((ln, i) => ctx.fillText(ln, 0, (i - (lines.length - 1) / 2) * lh));
@@ -1337,7 +1344,8 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; -webkit-user-selec
   // ---------- fonts from the Adobe Fonts kit ----------
   const KIT_URL = 'https://use.typekit.net/nsr0kgo.css';
   const WEIGHTS = { 100: 'Thin', 200: 'ExtraLight', 300: 'Light', 400: 'Regular', 500: 'Medium', 600: 'SemiBold', 700: 'Bold', 800: 'ExtraBold', 900: 'Black' };
-  const ROLE_W = { display: 700, num: 400, label: 400 };
+  const cssWeight = role => +getComputedStyle(root).getPropertyValue(`--${role}-weight`) || 400;
+  const ROLE_W = { display: 700, num: cssWeight('num'), label: cssWeight('label') };
   let faces = [];
   const roleSel = { display: document.getElementById('displaySel'), num: document.getElementById('numSel'), label: document.getElementById('labelSel') };
   const roleOk = { display: document.getElementById('displayOk'), num: document.getElementById('numOk'), label: document.getElementById('labelOk') };
@@ -1392,8 +1400,8 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; -webkit-user-selec
     roleOk[role].className = ok ? '' : 'bad';
   }
   // Only a pick made in the panel is remembered; saving the default on every load pinned stale defaults for every visitor.
-  // v2 drops the choices that the old code saved that way.
-  const FONT_KEY = 'kalpi-font-v2-';
+  // v2 dropped the choices that the old code saved that way.
+  const FONT_KEY = 'kalpi-font-v3-';   // v3: Argazim became the default for the number and the label
   function choose(role, idx, remember) {
     const fc = faces[idx]; if (!fc) return;
     applyFont(role, fc); roleSel[role].value = idx;
@@ -1428,7 +1436,7 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; -webkit-user-selec
     let saved = {};
     try { for (const role of Object.keys(roleSel)) saved[role] = localStorage.getItem(FONT_KEY + role); } catch (e) {}
     const idxOf = lbl => lbl ? faces.findIndex(fc => faceLabel(fc) === lbl) : -1;
-    const def = { display: pickDefault(/tel-aviv-brutalist/i, 700), num: pickDefault(/narkiss.?yair/i, 400), label: pickDefault(/narkiss.?yair/i, 400) };
+    const def = { display: pickDefault(/tel-aviv-brutalist/i, 700), num: pickDefault(/argazim/i, ROLE_W.num), label: pickDefault(/argazim/i, ROLE_W.label) };
     for (const role of Object.keys(roleSel)) choose(role, idxOf(saved[role]) >= 0 ? idxOf(saved[role]) : def[role]);
   }
 
@@ -1475,6 +1483,7 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; -webkit-user-selec
   const note = { mode: 'rest', x: -999, y: -999, shake: -1e9, fly: null, drag: null, msg: '' };
   let noteW = 0, noteH = 0, mouse = null;
   const labelFont = () => getComputedStyle(root).getPropertyValue('--label-family').trim() + ', "Arial Hebrew", sans-serif';
+  const noteWeight = () => getComputedStyle(root).getPropertyValue('--note-weight').trim() || 700;
   const scr = (x, y) => ({ x: ox + x * sc, y: oy + y * sc });
   const restPt = () => scr(OFF.x - 30, OFF.y + 30);                            // beside the lid's left corner
   const slotPt = () => { const m = lerpPt(SLOT_A, SLOT_B, 0.5); return scr(m.x, m.y - 230 - PAPER_H / 2); };   // where the paper starts its drop
@@ -1500,7 +1509,7 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; -webkit-user-selec
       const f = note.fly, t = clamp((now - f.t0) / FLY_MS), e = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2, to = slotPt();
       x = f.x + (to.x - f.x) * e; y = f.y + (to.y - f.y) * e - Math.sin(t * Math.PI) * 60 * s;   // a little arc
       if (t >= 1) {
-        papers.push({ t0: now, msg: note.msg, font: labelFont() });
+        papers.push({ t0: now, msg: note.msg, font: labelFont(), weight: noteWeight() });
         if (sim || !voted) newNote(); else return hideNote();
         const r = restPt(); note.x = mouse && !mouse.out ? mouse.x : r.x; note.y = mouse && !mouse.out ? mouse.y : r.y;
       }
