@@ -1553,7 +1553,7 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; -webkit-user-selec
       let tx, ty;
       if (note.mode === 'drag') { tx = note.drag.x + note.drag.dx; ty = note.drag.y + note.drag.dy; }
       else if (note.mode === 'follow') { tx = mouse.x; ty = mouse.y; }
-      else { const r = restPt(); tx = r.x; ty = r.y + (reduce ? 0 : Math.sin(now / 500) * 5 * s); }
+      else { const r = restPt(); tx = r.x; ty = r.y; }   // still: the owner found the bobbing jittery
       const a = reduce || note.mode === 'drag' ? 1 : Math.min(1, dt * 16);
       if (note.x < -900) { note.x = tx; note.y = ty; }   // first frame: no swoop in from the corner
       note.x += (tx - note.x) * a; note.y += (ty - note.y) * a;
