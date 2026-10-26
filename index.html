@@ -746,11 +746,11 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; -webkit-user-selec
   // around the box and every note also releases a handful of flowers into them (FIELD flowers spread
   // over the notes up to GOAL); a patch grows just enough to hold the flowers it has.
   // The whole ground is green at GOAL.
-  // The lawn and the flowers keep different clocks: the ground is all green at GOAL (60), but only a fifth
+  // The lawn and the flowers keep different clocks: the ground is all green at GOAL (60), but only a few
   // of the flowers are out by then; the rest come one handful per note until FULL (300), so a note after 60
   // still visibly adds something. Past FULL, each note's seed lands on a grown flower and it blooms again.
   const SLOT_MAX = 30, SPROUT = Math.max(2, CONFIG.sprout || 6), FIELD = 1800, FULL = Math.max(GOAL + 10, CONFIG.full || 300);
-  const FIELD_AT_GOAL = Math.round(FIELD / 5);   // ~360 at GOAL, then ~6 a note
+  const FIELD_AT_GOAL = 70;   // few at GOAL (green ground, sparse flowers), then ~7 a note until FULL
   const GRID = 300, RMIN = 55;
   let patches = [], plants = [], voteFlower = [], released = [];
   const pwob = (p, a) => 1 + 0.06 * Math.sin(5 * a + p.ph1) + 0.035 * Math.sin(9 * a + p.ph2);
@@ -789,6 +789,7 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; -webkit-user-selec
       plants.push(pl);
       return pl;
     };
+    const late = () => Math.round(GOAL + r() * (FULL - GOAL));   // shows up somewhere between GOAL and FULL
     const spot = (p, maxFrac = 0.98) => ({ d: Math.sqrt(r()) * p.rmax * maxFrac, a: r() * TAU });
 
     // flower capacity per counted patch, by area, adding up to FIELD
@@ -800,18 +801,19 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; -webkit-user-selec
       const isCounted = p.cap !== undefined;
       const nFl = isCounted ? p.cap : 12;
       for (let i = 0, tries = 0; i < nFl && tries < nFl * 30; tries++) {
-        const q = spot(p), pl = add(p, pickWeighted(r, FLOWER_MIX), q.d, q.a, { flower: true, vote: isCounted ? Infinity : -1 });
+        const q = spot(p), pl = add(p, pickWeighted(r, FLOWER_MIX), q.d, q.a, { flower: true, vote: isCounted ? Infinity : late() });
         if (pl) { p.flowers.push(pl); i++; }
       }
       p.flowers.sort((a, b) => a.d - b.d);
       for (let i = 0; i < 4; i++) add(p, 'grass', r() * 42, r() * TAU);          // so a fresh sprout isn't bare
       for (let i = 0; i < 12; i++) { const q = spot(p); add(p, 'grass', q.d, q.a); }
-      for (let i = 0; i < 2; i++) { const q = spot(p); add(p, 'reed', q.d, q.a); }
-      for (let i = 0; i < 3; i++) { const q = spot(p); add(p, 'clover', q.d, q.a); }
-      if (r() < 0.6) { const q = spot(p); add(p, 'fern', q.d, q.a); }
-      if (r() < 0.7) { const q = spot(p); add(p, 'bush', q.d, q.a); }
-      if (r() < 0.3) { const q = spot(p); add(p, 'bells', q.d, q.a); }
-      if (r() < 0.07) { const q = spot(p); add(p, 'sabra', q.d, q.a); }
+      // everything but the grass keeps the flowers' clock: by GOAL the ground is green and plain
+      for (let i = 0; i < 2; i++) { const q = spot(p); add(p, 'reed', q.d, q.a, { vote: late() }); }
+      for (let i = 0; i < 3; i++) { const q = spot(p); add(p, 'clover', q.d, q.a, { vote: late() }); }
+      if (r() < 0.6) { const q = spot(p); add(p, 'fern', q.d, q.a, { vote: late() }); }
+      if (r() < 0.7) { const q = spot(p); add(p, 'bush', q.d, q.a, { vote: late() }); }
+      if (r() < 0.3) { const q = spot(p); add(p, 'bells', q.d, q.a, { vote: late() }); }
+      if (r() < 0.07) { const q = spot(p); add(p, 'sabra', q.d, q.a, { vote: late() }); }
     }
     plants.sort((a, b) => a.gy - b.gy);
 
@@ -1184,7 +1186,7 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; -webkit-user-selec
     for (const p of plants) {
       const pr = p.patch, edge = pwob(pr, p.a);
       let out;
-      if (p.flower && p.vote > 0) out = p.vote <= nGrow && (pr.rv > 1 || p.born !== undefined);
+      if (p.vote > 0) out = p.vote <= nGrow && (pr.rv > 1 || p.born !== undefined);
       else out = p.born !== undefined ? p.d < pr.target * edge + 4 : p.d + 12 < pr.rv * edge;
       if (!out) { if (p.shCached) layersDirty = true; else if (p.born !== undefined) dirty = true; p.born = undefined; continue; }
       if (p.born === undefined) p.born = Math.max(now, pr.wake) + (p.vote === nGrow ? (p.seq || 0) * 45 : p.delay);   // a note's own flowers in a quick cascade
