@@ -314,13 +314,14 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; -webkit-user-selec
     LINE_K = s / sc;
     root.style.setProperty('--s', s);
     if (PORTRAIT) {
-      // phone / portrait: the box sits between the headline and the bottom row (counter, share),
-      // with room above the lid for the bouquet. Measured from the page, so the real fonts count.
+      // phone / portrait: the box is centred on the screen, as long as the bouquet clears the headline
+      // and the box clears the bottom row (counter, share). Measured from the page, so the real fonts count.
       const top = headEl.getBoundingClientRect().bottom;
       const bottom = Math.min(counterEl.getBoundingClientRect().top, shareEl.getBoundingClientRect().top);
       const bouquet = 330 * sc, below = 700 * sc;       // above the lid top / lid top to box bottom
-      const lidTop = top + bouquet + Math.max(8, (bottom - top - bouquet - below) / 2);
-      ox = W * 0.44 - HULL_C.x * sc;
+      const centred = H / 2 - (HULL_C.y - OFF.y - 1.25) * sc;
+      const lidTop = Math.max(top + bouquet + 8, Math.min(bottom - below, centred));
+      ox = W / 2 - HULL_C.x * sc;
       oy = lidTop - (OFF.y + 1.25) * sc;
     } else {
       // the frame is centred; the box keeps its middle where Figma has it

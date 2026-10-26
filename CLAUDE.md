@@ -13,7 +13,7 @@ Interactive web piece for Israel's 26th Knesset election: a visitor drops a note
 ## Design source
 - Figma file `gRrbKFeDOsnNemajXWTReN`, frame `26:6` (1920×1080). The box paths in `BOX_SVG` are the exact SVG export of node `27:882`. Don't redraw them.
 - Everything is laid out in Figma units. The text UI (headline, counter, share) scales by `s` (`--s`). Desktop: `s = min(W/1920, H/1080)`. Portrait: `s = min(W/930, H/1700)`.
-- The box and the garden scale by `sc = s · SCENE_K` (0.72; the owner found the frame's box too big). On desktop the box shrinks around its own middle (`HULL_C`); in portrait it sits between the measured headline and the bottom row (counter + share). The box strokes stay 2.5 on screen (`LINE_K`). Phone plants: `PLANT_K` 1.15.
+- The box and the garden scale by `sc = s · SCENE_K` (0.72; the owner found the frame's box too big). On desktop the box shrinks around its own middle (`HULL_C`); in portrait it's centred on the screen (horizontally always, vertically as long as the bouquet clears the measured headline and the box clears the bottom row). The box strokes stay 2.5 on screen (`LINE_K`). Phone plants: `PLANT_K` 1.15.
 - Fonts come from Adobe Fonts kit `nsr0kgo`: headline in Levit 1950 Black Extended; number in Narkiss Yair Variable "Bold Mono" (`--num-vars: "MONO" 1`; the axis tag is a guess, not verified); label in Narkiss Yair Regular. The review panel reads the kit at runtime and lists every face.
 - Palette: bg `#1c7de4`, ink `#101010`, lawn `#93dd6f`. Strokes 2.5. Shadows are solid ink, projected with `V = (1.662, 0.742)` per unit of height (read off the Figma shadow).
 
