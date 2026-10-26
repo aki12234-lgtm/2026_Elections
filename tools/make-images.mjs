@@ -1,7 +1,7 @@
 // Renders the share image and the icons with headless Edge or Chrome.
 //
 // og.jpg: a close-up of the real scene (box and bouquet) at 1200×630, without text: the share title carries the name.
-// The page is served locally with fonts/ blocked, so the licensed Tel Aviv files are never loaded or rendered here.
+// The page is served locally (ET Argazim included); share images carry no text, so the font doesn't show in them.
 // favicon.ico (32 px) and apple-touch-icon.png (180 px, square corners) come from favicon.svg.
 // Usage: node tools/make-images.mjs [notes=30]
 import { spawn } from 'node:child_process';
@@ -57,12 +57,12 @@ async function open(url, width, height) {
 const capture = async (format, extra = {}) => Buffer.from((await send('Page.captureScreenshot', { format, ...extra })).data, 'base64');
 function write(name, buf) { fs.writeFileSync(path.join(root, name), buf); console.log(`wrote ${name} (${Math.round(buf.length / 1024)} KB)`); }
 
-// the repo over http, minus fonts/ (license) and live.js (no Firebase)
+// the repo over http, minus live.js (no Firebase)
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.jpg': 'image/jpeg', '.png': 'image/png', '.svg': 'image/svg+xml', '.ico': 'image/x-icon' };
 const server = http.createServer((req, res) => {
   const p = decodeURIComponent(new URL(req.url, 'http://localhost').pathname);
   const file = path.join(root, p);
-  if (p.startsWith('/fonts/') || p === '/live.js' || !file.startsWith(root) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) { res.writeHead(404); return res.end(); }
+  if (p === '/live.js' || !file.startsWith(root) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) { res.writeHead(404); return res.end(); }
   res.writeHead(200, { 'content-type': TYPES[path.extname(file)] || 'application/octet-stream' });
   res.end(fs.readFileSync(file));
 }).listen(0, '127.0.0.1');

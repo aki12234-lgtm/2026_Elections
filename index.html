@@ -40,11 +40,11 @@
   --paper: #ffffff;
   --count-color: var(--blue);
   /* roles (overwritten from the kit at runtime) */
-  --display-family: "et-argazim"; --display-weight: 900; --display-stretch: normal; --display-style: normal; --display-vars: "ital" 0;
-  --display-size: 100; --display-size-portrait: 100;   /* the longer line: ~750 of the 1920 frame, ~750 of 930 in portrait */
+  --display-family: "et-argazim"; --display-weight: 500; --display-stretch: normal; --display-style: normal; --display-vars: "ital" 12;   /* Medium Italic */
+  --display-size: 115; --display-size-portrait: 115;   /* the longer line: ~760 of the 1920 frame, and of 930 in portrait */
   --display-stroke: 5;   /* 2.5 outside, like every outline */
   --display-shadow: none;
-  --num-family: "et-argazim"; --num-weight: 900; --num-stretch: normal; --num-style: normal; --num-vars: "ital" 12; --num-size: 132;   /* Black Italic: the owner picked it */
+  --num-family: "et-argazim"; --num-weight: 700; --num-stretch: normal; --num-style: normal; --num-vars: "ital" 12; --num-size: 132;   /* Bold Italic */
   --label-family: "et-argazim"; --label-weight: 500; --label-stretch: normal; --label-style: normal; --label-vars: "ital" 0; --label-size: 32;
   --ui-weight: 700;     /* share button */
   --note-weight: 700;   /* the message on the note */
@@ -1469,7 +1469,7 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; -webkit-user-selec
   // garden words only: no slogans, no party names or words parties campaign on (ביחד, אחדות, אמון, מחר טוב יותר, התחלה חדשה are out)
   const MESSAGES = ['תקווה', 'שלום', 'יהיה בסדר', 'אולי הפעם', 'שיהיה טוב', 'צמיחה', 'פריחה', 'אור', 'סבלנות', 'נשימה'];
   const pickMessage = () => MESSAGES[Math.floor(Math.random() * MESSAGES.length)];
-  const NOTE = { w: (SLOT_B.x - SLOT_A.x) * (PAPER_T[1] - PAPER_T[0]), h: PAPER_H, font: 28, skew: 30 };   // frame units
+  const NOTE = { w: (SLOT_B.x - SLOT_A.x) * (PAPER_T[1] - PAPER_T[0]), h: PAPER_H, font: 36, skew: 30 };   // frame units
   const FLY_MS = 420;
   const noteEl = document.getElementById('note'), noteMsg = document.getElementById('noteMsg');
   const note = { mode: 'rest', x: -999, y: -999, shake: -1e9, fly: null, drag: null, msg: '' };

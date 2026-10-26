@@ -14,7 +14,7 @@
 | `tools/make-preview.py` | בונה קובץ HTML אחד לתצוגה מקדימה, בלי שרת |
 | `og.jpg`, `favicon.svg`, `favicon.ico`, `apple-touch-icon.png` | תמונת השיתוף (1200×630) והאייקונים |
 | `tools/make-images.mjs` | מייצר מחדש את תמונת השיתוף והאייקונים עם Edge או Chrome: `node tools/make-images.mjs [פתקים]` |
-| `fonts/tel-aviv/` | פונט הכותרת, תל אביב של פונטף, בדיוק כפי שהגיע. רישיון אתר #04813 לדומיין הזה בלבד, אסור לשנות את הקבצים |
+| `fonts/et-argazim/` | הפונט היחיד באתר: ארגזים של אלעד אליקים (Elad Type), קובץ משתנה אחד. יש אישור שימוש |
 
 ## פרסום ב־GitHub Pages
 **Settings → Pages → Build and deployment → Source: Deploy from a branch → Branch: `main`, תיקייה `/ (root)` → Save**.
