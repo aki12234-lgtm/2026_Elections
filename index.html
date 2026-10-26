@@ -289,7 +289,7 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; -webkit-user-selec
 (() => {
   // ---------- tokens ----------
   const INK = '#101010', BLUE = '#1c7de4', WHITE = '#ffffff';
-  const LAWN = '#93dd6f', GRASS = '#4cb54f', GRASS_DK = '#2f9443', BUSH = '#3e9f4c', TREE = '#5bbd52';
+  const LAWN = '#9dec76', GRASS = '#4cb54f', GRASS_DK = '#2f9443', BUSH = '#3e9f4c', TREE = '#5bbd52';
   const RED = '#ff4b3e', YEL = '#ffcf3a', PINK = '#ff9ac1', ORANGE = '#ff8a2b', TAN = '#f1d27a';
   const ISO = 0.5774, TAU = Math.PI * 2;
   const CONFIG = window.KALPI_CONFIG || {};
@@ -697,6 +697,32 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; -webkit-user-selec
     for (const [name, o] of Object.entries(FLOWERS)) addSpecies(name, 8, (r, i) => flowerVariant(r, o, i));
   }
 
+  // ---------- paper on the colours ----------
+  // The .grain layer screens the paper over everything, which only shows on dark colours. The lawn and the
+  // plants also get the paper multiplied in (black, with the paper's fibres as alpha), so it shows on light ones.
+  const PAPER_FIBRE = [24, 2.5];   // paper value where the fibres start, and how dark they get: ~8% darker on average
+  let PAPER_C = null;
+  const paperImg = new Image();
+  paperImg.onload = () => {
+    const c = document.createElement('canvas'); c.width = paperImg.naturalWidth; c.height = paperImg.naturalHeight;
+    const g = c.getContext('2d'); g.drawImage(paperImg, 0, 0);
+    const d = g.getImageData(0, 0, c.width, c.height), px = d.data;
+    for (let i = 0; i < px.length; i += 4) { px[i + 3] = clamp((px[i + 1] - PAPER_FIBRE[0]) * PAPER_FIBRE[1], 0, 150); px[i] = px[i + 1] = px[i + 2] = 0; }
+    g.putImageData(d, 0, 0);
+    PAPER_C = c;
+    if (W) { buildSprites(); layersDirty = lawnDirty = dirty = true; }
+  };
+  paperImg.src = 'paper.jpg';
+  // the paper over whatever g already has; k = canvas px per paper px (the .grain layer: cover, so DPR · paperK())
+  const paperK = () => Math.max(W / 1920, H / 1080) * DPR;
+  function paperOn(g, k, x, y) {
+    if (!PAPER_C) return;
+    const pat = g.createPattern(PAPER_C, 'repeat');
+    pat.setTransform(new DOMMatrix([k, 0, 0, k, x, y]));
+    g.save(); g.setTransform(1, 0, 0, 1, 0, 0); g.globalCompositeOperation = 'source-atop';
+    g.fillStyle = pat; g.fillRect(0, 0, g.canvas.width, g.canvas.height); g.restore();
+  }
+
   // render every variant into bitmaps at the current scale: the plant, and its shadow
   let SPR = 1;
   function raster(part, ls, toSh = toShadow) {
@@ -705,6 +731,7 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; -webkit-user-selec
       const P = sh ? toSh : toScreen, b = listBounds(part.list, P), c = document.createElement('canvas');
       c.width = Math.max(1, Math.ceil((b.x1 - b.x0 + pad * 2) * k)); c.height = Math.max(1, Math.ceil((b.y1 - b.y0 + pad * 2) * k));
       const g = c.getContext('2d'); g.setTransform(k, 0, 0, k, (pad - b.x0) * k, (pad - b.y0) * k); drawList(g, part.list, sh, ls, P);
+      if (!sh) paperOn(g, paperK() * 1.25, -Math.random() * 1920, -Math.random() * 1080);   // sprites are drawn at 1/1.25
       return { c, ax: pad - b.x0, ay: pad - b.y0 };
     };
     part.img = mk(false); part.sil = mk(true);
@@ -1099,6 +1126,7 @@ body { font-family: system-ui, "Segoe UI", Arial, sans-serif; -webkit-user-selec
         g.beginPath(); vis.forEach(p => lawnPath(g, p, 13)); g.fillStyle = INK; g.fill();           // turf edge
         g.beginPath(); vis.forEach(p => lawnPath(g, p, 0)); g.lineWidth = 5; g.strokeStyle = INK; g.lineJoin = 'round'; g.stroke();
         g.fillStyle = LAWN; g.fill();                                                                // one outline around the union
+        const k = paperK(); paperOn(g, k, (W * DPR - 1920 * k) / 2, (H * DPR - 1080 * k) / 2);
       }
       for (const p of patches) p.drawnRv = p.rv;
       lawnDirty = false;
